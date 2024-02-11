@@ -1,4 +1,5 @@
 # CS2 Discord Chat Sync (1.0.0)
+![image](https://du.hurenso.hn/r/Gyc70A.png)
 
 # About
 CS2 Discord Chat Sync is a plugin for Counter-Strike 2 that syncs chat between the game and a Discord channel.
