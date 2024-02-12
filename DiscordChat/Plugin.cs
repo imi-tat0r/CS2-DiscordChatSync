@@ -1,4 +1,5 @@
 ﻿using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Core.Attributes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -6,8 +7,8 @@ namespace DiscordChat;
 
 public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
 {
-    public override string ModuleName => "DiscordChatSync";
-    public override string ModuleVersion => "1.0.0";
+    public override string ModuleName => "CS2-DiscordChatSync";
+    public override string ModuleVersion => "1.0.1";
     public override string ModuleAuthor => "imi-tat0r";
     public override string ModuleDescription => "Syncs chat messages from and to a discord channel.";
     public DiscordChatSyncConfig Config { get; set; } = new();
@@ -42,7 +43,7 @@ public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
         Console.WriteLine("[DiscordChatSync] Add services to DI container");
         var serviceCollection = new ServiceCollection();
 
-        serviceCollection.AddSingleton<DiscordChatSync>(this);
+        serviceCollection.AddSingleton(this);
         serviceCollection.AddSingleton<DiscordService>();
 
         _serviceProvider = serviceCollection.BuildServiceProvider();
@@ -51,10 +52,14 @@ public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
         Console.WriteLine("[DiscordChatSync] Registering event handlers");
 
         var discordService = _serviceProvider.GetRequiredService<DiscordService>();
-        RegisterEventHandler<EventPlayerChat>(discordService.OnPlayerChat);
         RegisterListener<Listeners.OnMapStart>(discordService.OnMapStart);
         Console.WriteLine("[DiscordChatSync] Event handlers registered");
 
+        Console.WriteLine("[DiscordChatSync] Registering global command handler");
+        
+        AddCommandListener(null, discordService.OnClientCommandGlobalPre);
+        Console.WriteLine("[DiscordChatSync] Global command handler registered");
+        
         discordService.StartAsync(new CancellationToken());
 
         Console.WriteLine("[DiscordChatSync] Plugin loaded");

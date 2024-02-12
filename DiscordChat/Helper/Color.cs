@@ -1,7 +1,7 @@
 ﻿using System.Drawing;
 using CounterStrikeSharp.API.Modules.Utils;
 
-namespace DiscordChat;
+namespace DiscordChat.Helper;
 
 public static class ColorHelper
 {

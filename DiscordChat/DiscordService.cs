@@ -1,9 +1,11 @@
 ﻿using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
+using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
 using Discord;
 using Discord.WebSocket;
 using DiscordChat.Extensions;
+using DiscordChat.Helper;
 using Microsoft.Extensions.Hosting;
 
 namespace DiscordChat;
@@ -25,7 +27,6 @@ public class DiscordService : BackgroundService
         Console.WriteLine("[DiscordChatSync] Starting DiscordService");
         return Initialize(stoppingToken);
     }
-
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         Console.WriteLine("[DiscordChatSync] Stopping DiscordService");
@@ -80,7 +81,6 @@ public class DiscordService : BackgroundService
         
         Console.WriteLine("[DiscordChatSync] Why are we here? Just to suffer?");
     }
-
     private async Task Ready()
     {
         Console.WriteLine("[DiscordChatSync] Ready?");
@@ -92,7 +92,7 @@ public class DiscordService : BackgroundService
         {
             // update info
             await _client.SetStatusAsync(UserStatus.Online);
-            await _client.SetCustomStatusAsync($"Syncing chat messages");
+            await _client.SetGameAsync($"Syncing chat messages");
             
             Console.WriteLine("[DiscordChatSync] Ready!");
         }
@@ -101,11 +101,8 @@ public class DiscordService : BackgroundService
             Console.WriteLine("[DiscordChatSync] Exception in Ready: " + ex.Message);
         }
     }
-
     private Task MessageReceived(SocketMessage m)
     {
-        Console.WriteLine("[DiscordChatSync] Message received");
-        
         // see if the author is the guild user
         var author = m.Author;
         if (author is not SocketGuildUser user || user.IsBot || user.IsWebhook || m is not SocketUserMessage msg)
@@ -153,72 +150,46 @@ public class DiscordService : BackgroundService
 
     #region CS2
     
-    public HookResult OnPlayerChat(EventPlayerChat eventPlayerChat, GameEventInfo info)
+    public HookResult OnClientCommandGlobalPre(CCSPlayerController? player, CommandInfo info)
     {
-        // account for team chat setting
-        if (!_plugin.Config.SyncTeamChat && eventPlayerChat.Teamonly)
+        var command = info.GetArg(0);
+        
+        if (command != "say" && command != "say_team")
             return HookResult.Continue;
         
-        var message = eventPlayerChat.Text.Trim();
+        return command == "say" ? 
+            OnSay(player, info) : 
+            OnSayTeam(player, info);
+    }
+    public HookResult OnSay(CCSPlayerController? player, CommandInfo info)
+    {
+        Console.WriteLine("[DiscordChatSync] OnSay");
+        Console.WriteLine(info.GetArg(1));
+        if (!ShouldSyncMessage(info.GetArg(1), out var message)) 
+            return HookResult.Continue;
         
-        // account for optional message prefix
-        if (!string.IsNullOrEmpty(_plugin.Config.MessagePrefix))
-        {
-            // ignore messages that don't start with the prefix
-            if (!message.StartsWith(_plugin.Config.MessagePrefix))
-                return HookResult.Continue;
-            
-            // remove the prefix from the message
-            message = message[_plugin.Config.MessagePrefix.Length..].Trim();
-        }
-
-        // we only want to sync chat messages from players
-        var player = Utilities.GetPlayerFromUserid(eventPlayerChat.Userid);
         if (!player.IsPlayer())
             return HookResult.Continue;
-
-        if (_plugin.Config.SyncChannelId == 0)
-        {
-            for (var i = 0; i < 3; i++)
-                Console.WriteLine("[DiscordChatSync] Sync channel id is not set. Please set it in the config file.");
-            return HookResult.Continue;
-        }
-
-        // print any message to specific channel
-        if (_client?.GetChannel(_plugin.Config.SyncChannelId) is not IMessageChannel channel)
-            return HookResult.Continue;
-
-        var teamColor = player.TeamNum switch
-        {
-            (byte)CsTeam.Terrorist => ColorHelper.ChatColorToHexColor(ChatColors.Orange),
-            (byte)CsTeam.CounterTerrorist => ColorHelper.ChatColorToHexColor(ChatColors.Blue),
-            (byte)CsTeam.Spectator => ColorHelper.ChatColorToHexColor(ChatColors.Grey),
-            _ => System.Drawing.Color.White
-        };
-
-        var discordColor = new Color(teamColor.R, teamColor.G, teamColor.B);
-
-        var chatType = "[ALL] ";
-
-        if (eventPlayerChat.Teamonly)
-        {
-            chatType = player.TeamNum switch
-            {
-                (byte)CsTeam.Terrorist => "[T] ",
-                (byte)CsTeam.CounterTerrorist => "[CT] ",
-                (byte)CsTeam.Spectator => "[Spec] ",
-                _ => ""
-            };
-        }
         
-        var embed = new EmbedBuilder()
-            .WithAuthor(chatType + player.PlayerName)
-            .WithDescription(message)
-            .WithColor(discordColor)
-            .Build();
-
-        channel.SendMessageAsync(embed: embed);
-
+        SendDiscordMessage(false, player!, message);
+        
+        return HookResult.Continue;
+    }
+    public HookResult OnSayTeam(CCSPlayerController? player, CommandInfo info)
+    {
+        Console.WriteLine("[DiscordChatSync] OnSayTeam");
+        Console.WriteLine(info.GetArg(1));
+        if (!_plugin.Config.SyncTeamChat)
+            return HookResult.Continue;
+        
+        if (!ShouldSyncMessage(info.GetArg(1), out var message)) 
+            return HookResult.Continue;
+        
+        if (!player.IsPlayer())
+            return HookResult.Continue;
+        
+        SendDiscordMessage(true, player!, message);
+        
         return HookResult.Continue;
     }
     public void OnMapStart(string mapName)
@@ -231,6 +202,72 @@ public class DiscordService : BackgroundService
             .WithAuthor("System")
             .WithDescription("Changed map to " + mapName)
             .WithColor(Color.Blue)
+            .Build();
+
+        channel.SendMessageAsync(embed: embed);
+    }
+
+    #endregion
+
+    #region Helpers
+
+    private bool ShouldSyncMessage(string inMessage, out string outMessage)
+    {
+        outMessage = inMessage.Trim();
+
+        // no prefix means we want all messages
+        if (string.IsNullOrEmpty(_plugin.Config.MessagePrefix)) 
+            return true;
+        
+        // ignore messages that don't start with the prefix
+        if (!outMessage.StartsWith(_plugin.Config.MessagePrefix))
+            return false;
+            
+        // remove the prefix from the message
+        outMessage = outMessage[_plugin.Config.MessagePrefix.Length..].Trim();
+
+        return true;
+    }
+    private void SendDiscordMessage(bool teamOnly, CCSPlayerController player, string message)
+    {
+        if (_plugin.Config.SyncChannelId == 0)
+        {
+            for (var i = 0; i < 3; i++)
+                Console.WriteLine("[DiscordChatSync] Sync channel id is not set. Please set it in the config file.");
+            return;
+        }
+
+        // print any message to specific channel
+        if (_client?.GetChannel(_plugin.Config.SyncChannelId) is not IMessageChannel channel)
+            return;
+
+        var teamColor = player.TeamNum switch
+        {
+            (byte)CsTeam.Terrorist => ColorHelper.ChatColorToHexColor(ChatColors.Orange),
+            (byte)CsTeam.CounterTerrorist => ColorHelper.ChatColorToHexColor(ChatColors.Blue),
+            (byte)CsTeam.Spectator => ColorHelper.ChatColorToHexColor(ChatColors.Grey),
+            _ => System.Drawing.Color.White
+        };
+
+        var discordColor = new Color(teamColor.R, teamColor.G, teamColor.B);
+
+        var chatType = "[ALL] - ";
+
+        if (teamOnly)
+        {
+            chatType = player.TeamNum switch
+            {
+                (byte)CsTeam.Terrorist => "[T]",
+                (byte)CsTeam.CounterTerrorist => "[CT]",
+                (byte)CsTeam.Spectator => "[Spec]",
+                _ => ""
+            };
+        }
+        
+        var embed = new EmbedBuilder()
+            .WithAuthor(chatType + " - " + player.PlayerName)
+            .WithDescription(message)
+            .WithColor(discordColor)
             .Build();
 
         channel.SendMessageAsync(embed: embed);
