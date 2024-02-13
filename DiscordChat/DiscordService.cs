@@ -115,23 +115,27 @@ public class DiscordService : BackgroundService
         var roles = user.Roles.ToList();
         var highestRole = roles.MaxBy(x => x.Position);
 
-
         var hexColor = highestRole != null
             ? "#" +
               highestRole.Color.R.ToString("X2") +
               highestRole.Color.G.ToString("X2") +
               highestRole.Color.B.ToString("X2")
             : "#ffffff";
-
+        
         Server.NextWorldUpdate(() =>
         {
             var firstLine = $"[Discord - {msg.Channel.Name}] {ColorHelper.HexColorToChatColor(hexColor)}{user.DisplayName}{ChatColors.Default}: ";
             
-            // split the message by new lines, and remove any empty lines (since it prints the previous line again)
-            var messageSplit = msg.Content.Split('\n').Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
+            // replace emojis with their string counter part
+            // split the message by new lines
+            // remove any empty lines (since it would print the previous line again)
+            var messageSplit = Emojis.ReplaceEmojisInString(msg.CleanContent)
+                .Split('\n')
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToArray();
             
             // if we only have one line, inline the message
-            if (messageSplit.Length <= 1)
+            if (messageSplit.Length == 1)
                 firstLine += messageSplit[0];
             
             Server.PrintToChatAll(firstLine);
@@ -161,10 +165,10 @@ public class DiscordService : BackgroundService
             OnSay(player, info) : 
             OnSayTeam(player, info);
     }
-    public HookResult OnSay(CCSPlayerController? player, CommandInfo info)
+
+    private HookResult OnSay(CCSPlayerController? player, CommandInfo info)
     {
         Console.WriteLine("[DiscordChatSync] OnSay");
-        Console.WriteLine(info.GetArg(1));
         if (!ShouldSyncMessage(info.GetArg(1), out var message)) 
             return HookResult.Continue;
         
@@ -175,10 +179,9 @@ public class DiscordService : BackgroundService
         
         return HookResult.Continue;
     }
-    public HookResult OnSayTeam(CCSPlayerController? player, CommandInfo info)
+    private HookResult OnSayTeam(CCSPlayerController? player, CommandInfo info)
     {
         Console.WriteLine("[DiscordChatSync] OnSayTeam");
-        Console.WriteLine(info.GetArg(1));
         if (!_plugin.Config.SyncTeamChat)
             return HookResult.Continue;
         
@@ -214,7 +217,10 @@ public class DiscordService : BackgroundService
     private bool ShouldSyncMessage(string inMessage, out string outMessage)
     {
         outMessage = inMessage.Trim();
-
+     
+        if (string.IsNullOrWhiteSpace(outMessage))
+            return false;
+        
         // no prefix means we want all messages
         if (string.IsNullOrEmpty(_plugin.Config.MessagePrefix)) 
             return true;
@@ -270,7 +276,15 @@ public class DiscordService : BackgroundService
             .WithColor(discordColor)
             .Build();
 
-        channel.SendMessageAsync(embed: embed);
+        try
+        {
+            channel.SendMessageAsync(embed: embed);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Exception: {e}");
+            return;
+        }
     }
 
     #endregion
