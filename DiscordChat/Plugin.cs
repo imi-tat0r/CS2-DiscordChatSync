@@ -1,14 +1,13 @@
 ﻿using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 namespace DiscordChat;
 
 public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
 {
     public override string ModuleName => "CS2-DiscordChatSync";
-    public override string ModuleVersion => "1.0.1";
+    public override string ModuleVersion => "1.0.2";
     public override string ModuleAuthor => "imi-tat0r";
     public override string ModuleDescription => "Syncs chat messages from and to a discord channel.";
     public DiscordChatSyncConfig Config { get; set; } = new();

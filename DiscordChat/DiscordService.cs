@@ -115,23 +115,31 @@ public class DiscordService : BackgroundService
         var roles = user.Roles.ToList();
         var highestRole = roles.MaxBy(x => x.Position);
 
-
         var hexColor = highestRole != null
             ? "#" +
               highestRole.Color.R.ToString("X2") +
               highestRole.Color.G.ToString("X2") +
               highestRole.Color.B.ToString("X2")
             : "#ffffff";
-
+        
         Server.NextWorldUpdate(() =>
         {
             var firstLine = $"[Discord - {msg.Channel.Name}] {ColorHelper.HexColorToChatColor(hexColor)}{user.DisplayName}{ChatColors.Default}: ";
             
-            // split the message by new lines, and remove any empty lines (since it prints the previous line again)
-            var messageSplit = msg.Content.Split('\n').Where(s => !string.IsNullOrWhiteSpace(s)).ToArray();
+            // replace emojis with their string counter part
+            // split the message by new lines
+            // remove any empty lines (since it would print the previous line again)
+            var messageSplit = Emojis.ReplaceEmojisInString(msg.CleanContent)
+                .Split('\n')
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToArray();
+            
+            // if there's any part in the string that's >100 characters without any whitespace, we need to add a whitespace there
+            for (var i = 0; i < messageSplit.Length; i++)
+                messageSplit[i] = Chat.ForceBreakLongWords(messageSplit[i]);
             
             // if we only have one line, inline the message
-            if (messageSplit.Length <= 1)
+            if (messageSplit.Length == 1)
                 firstLine += messageSplit[0];
             
             Server.PrintToChatAll(firstLine);
@@ -161,24 +169,22 @@ public class DiscordService : BackgroundService
             OnSay(player, info) : 
             OnSayTeam(player, info);
     }
-    public HookResult OnSay(CCSPlayerController? player, CommandInfo info)
+    private HookResult OnSay(CCSPlayerController? player, CommandInfo info)
     {
         Console.WriteLine("[DiscordChatSync] OnSay");
-        Console.WriteLine(info.GetArg(1));
         if (!ShouldSyncMessage(info.GetArg(1), out var message)) 
             return HookResult.Continue;
         
-        if (!player.IsPlayer())
+        if (player != null && !player.IsPlayer())
             return HookResult.Continue;
         
-        SendDiscordMessage(false, player!, message);
+        SendDiscordMessage(false, player, message);
         
         return HookResult.Continue;
     }
-    public HookResult OnSayTeam(CCSPlayerController? player, CommandInfo info)
+    private HookResult OnSayTeam(CCSPlayerController? player, CommandInfo info)
     {
         Console.WriteLine("[DiscordChatSync] OnSayTeam");
-        Console.WriteLine(info.GetArg(1));
         if (!_plugin.Config.SyncTeamChat)
             return HookResult.Continue;
         
@@ -214,7 +220,10 @@ public class DiscordService : BackgroundService
     private bool ShouldSyncMessage(string inMessage, out string outMessage)
     {
         outMessage = inMessage.Trim();
-
+     
+        if (string.IsNullOrWhiteSpace(outMessage))
+            return false;
+        
         // no prefix means we want all messages
         if (string.IsNullOrEmpty(_plugin.Config.MessagePrefix)) 
             return true;
@@ -228,7 +237,7 @@ public class DiscordService : BackgroundService
 
         return true;
     }
-    private void SendDiscordMessage(bool teamOnly, CCSPlayerController player, string message)
+    private void SendDiscordMessage(bool teamOnly, CCSPlayerController? player, string message)
     {
         if (_plugin.Config.SyncChannelId == 0)
         {
@@ -241,7 +250,7 @@ public class DiscordService : BackgroundService
         if (_client?.GetChannel(_plugin.Config.SyncChannelId) is not IMessageChannel channel)
             return;
 
-        var teamColor = player.TeamNum switch
+        var teamColor = (player?.TeamNum ?? (byte)CsTeam.None) switch
         {
             (byte)CsTeam.Terrorist => ColorHelper.ChatColorToHexColor(ChatColors.Orange),
             (byte)CsTeam.CounterTerrorist => ColorHelper.ChatColorToHexColor(ChatColors.Blue),
@@ -255,22 +264,29 @@ public class DiscordService : BackgroundService
 
         if (teamOnly)
         {
-            chatType = player.TeamNum switch
+            chatType = player?.TeamNum switch
             {
-                (byte)CsTeam.Terrorist => "[T]",
-                (byte)CsTeam.CounterTerrorist => "[CT]",
-                (byte)CsTeam.Spectator => "[Spec]",
+                (byte)CsTeam.Terrorist => "[T] - ",
+                (byte)CsTeam.CounterTerrorist => "[CT] - ",
+                (byte)CsTeam.Spectator => "[Spec] - ",
                 _ => ""
             };
         }
         
         var embed = new EmbedBuilder()
-            .WithAuthor(chatType + " - " + player.PlayerName)
+            .WithAuthor(chatType + (player?.PlayerName ?? "Console"))
             .WithDescription(message)
             .WithColor(discordColor)
             .Build();
 
-        channel.SendMessageAsync(embed: embed);
+        try
+        {
+            channel.SendMessageAsync(embed: embed);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Exception: {e}");
+        }
     }
 
     #endregion
