@@ -1,4 +1,4 @@
-# CS2 Discord Chat Sync (1.0.0)
+# CS2 Discord Chat Sync (1.0.3)
 ![image](https://du.hurenso.hn/r/Gyc70A.png)
 
 # About
@@ -25,17 +25,18 @@ CS2 Discord Chat Sync is a plugin for Counter-Strike 2 that syncs chat between t
    ![perms](https://du.hurenso.hn/r/kTDZ8O.png)
 4. Add your Discord bot token and channel id to the config file  
    4.1. Located at `addons/counterstrikesharp/configs/plugins/DiscordChat/DiscordChat.json`
-4. Restart your server~~~~
+4. Restart your server
 
 # Config
-```
+```json
 {
   "DiscordToken": "", // your discord bot token
   "SyncChannelId": 0, // the channel id to sync from and to
   "AdditionalReadChannelIds": [], // additional channels to read from (for news and announcements)
   "SyncTeamChat": false, // if false, team chat will not be synced
-  "MessagePrefix": "", // if empty, no prefix is needed
-  "ConfigVersion": 1
+  "MessagePrefix": "", // only messages starting with the prefix will be synced
+  "IgnoreChatTriggers": true // chat and silent triggers from core config will be ignored
+  "ConfigVersion": 1, // do not change
 }
 ```
 

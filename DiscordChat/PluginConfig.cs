@@ -10,4 +10,5 @@ public class DiscordChatSyncConfig : BasePluginConfig
     [JsonPropertyName("AdditionalReadChannelIds")] public List<ulong> AdditionalReadChannelIds { get; set; } = new();
     [JsonPropertyName("SyncTeamChat")] public bool SyncTeamChat { get; set; }
     [JsonPropertyName("MessagePrefix")] public string MessagePrefix { get; set; } = "";
+    [JsonPropertyName("IgnoreChatTriggers")] public bool IgnoreChatTriggers { get; set; } = true;
 }
