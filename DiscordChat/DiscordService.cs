@@ -27,6 +27,7 @@ public class DiscordService : BackgroundService
         Console.WriteLine("[DiscordChatSync] Starting DiscordService");
         return Initialize(stoppingToken);
     }
+
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         Console.WriteLine("[DiscordChatSync] Stopping DiscordService");
@@ -60,9 +61,9 @@ public class DiscordService : BackgroundService
                 Console.WriteLine("[DiscordChatSync] Discord token is not set. Please set it in the config file.");
             return;
         }
-        
+
         Console.WriteLine("[DiscordChatSync] Logging in");
-        
+
         c.Log += (msg) =>
         {
             Console.WriteLine(msg.ToString());
@@ -70,21 +71,22 @@ public class DiscordService : BackgroundService
         };
         c.Ready += Ready;
         c.MessageReceived += MessageReceived;
-        
+
         // login and start the bot
         await c.LoginAsync(TokenType.Bot, _plugin.Config.DiscordToken);
         await c.StartAsync();
 
         _client = c;
-        
+
         await Task.Delay(-1, stoppingToken);
-        
+
         Console.WriteLine("[DiscordChatSync] Why are we here? Just to suffer?");
     }
+
     private async Task Ready()
     {
         Console.WriteLine("[DiscordChatSync] Ready?");
-        
+
         if (_client == null)
             return;
 
@@ -93,7 +95,7 @@ public class DiscordService : BackgroundService
             // update info
             await _client.SetStatusAsync(UserStatus.Online);
             await _client.SetGameAsync($"Syncing chat messages");
-            
+
             Console.WriteLine("[DiscordChatSync] Ready!");
         }
         catch (Exception ex)
@@ -101,6 +103,7 @@ public class DiscordService : BackgroundService
             Console.WriteLine("[DiscordChatSync] Exception in Ready: " + ex.Message);
         }
     }
+
     private Task MessageReceived(SocketMessage m)
     {
         // see if the author is the guild user
@@ -109,7 +112,8 @@ public class DiscordService : BackgroundService
             return Task.CompletedTask;
 
         // see if the message is from the correct channel
-        if (msg.Channel.Id != _plugin.Config.SyncChannelId && !_plugin.Config.AdditionalReadChannelIds.Contains(msg.Channel.Id))
+        if (msg.Channel.Id != _plugin.Config.SyncChannelId &&
+            !_plugin.Config.AdditionalReadChannelIds.Contains(msg.Channel.Id))
             return Task.CompletedTask;
 
         var roles = user.Roles.ToList();
@@ -121,11 +125,12 @@ public class DiscordService : BackgroundService
               highestRole.Color.G.ToString("X2") +
               highestRole.Color.B.ToString("X2")
             : "#ffffff";
-        
+
         Server.NextWorldUpdate(() =>
         {
-            var firstLine = $"[Discord - {msg.Channel.Name}] {ColorHelper.HexColorToChatColor(hexColor)}{user.DisplayName}{ChatColors.Default}: ";
-            
+            var firstLine =
+                $"[Discord - {msg.Channel.Name}] {ColorHelper.HexColorToChatColor(hexColor)}{user.DisplayName}{ChatColors.Default}: ";
+
             // replace emojis with their string counter part
             // split the message by new lines
             // remove any empty lines (since it would print the previous line again)
@@ -133,20 +138,20 @@ public class DiscordService : BackgroundService
                 .Split('\n')
                 .Where(s => !string.IsNullOrWhiteSpace(s))
                 .ToArray();
-            
-            // if there's any part in the string that's >100 characters without any whitespace, we need to add a whitespace there
+
+            // if there's any part in the string that's >50 characters without any whitespace, we need to add a whitespace there
             for (var i = 0; i < messageSplit.Length; i++)
                 messageSplit[i] = Chat.ForceBreakLongWords(messageSplit[i]);
-            
+
             // if we only have one line, inline the message
             if (messageSplit.Length == 1)
                 firstLine += messageSplit[0];
-            
+
             Server.PrintToChatAll(firstLine);
 
-            if (messageSplit.Length <= 1) 
+            if (messageSplit.Length <= 1)
                 return;
-            
+
             foreach (var line in messageSplit)
                 Server.PrintToChatAll(line);
         });
@@ -157,47 +162,61 @@ public class DiscordService : BackgroundService
     #endregion
 
     #region CS2
-    
+
     public HookResult OnClientCommandGlobalPre(CCSPlayerController? player, CommandInfo info)
     {
-        var command = info.GetArg(0);
-        
-        if (command != "say" && command != "say_team")
+        if (info.ArgCount < 2)
             return HookResult.Continue;
         
-        return command == "say" ? 
-            OnSay(player, info) : 
-            OnSayTeam(player, info);
+        var command = info.GetArg(0);
+        var message = info.GetArg(1);
+
+        if (command != "say" && command != "say_team")
+            return HookResult.Continue;
+
+        if (string.IsNullOrWhiteSpace(message))
+            return HookResult.Continue;
+        
+        var isChatTrigger = CoreConfig.PublicChatTrigger.Contains(message[0].ToString()) ||
+                           CoreConfig.SilentChatTrigger.Contains(message[0].ToString());
+
+        if (_plugin.Config.IgnoreChatTriggers && isChatTrigger)
+            return HookResult.Continue;
+
+        return command == "say" ? OnSay(player, info) : OnSayTeam(player, info);
     }
+
     private HookResult OnSay(CCSPlayerController? player, CommandInfo info)
     {
         Console.WriteLine("[DiscordChatSync] OnSay");
-        if (!ShouldSyncMessage(info.GetArg(1), out var message)) 
+        if (!ShouldSyncMessage(info.GetArg(1), out var message))
             return HookResult.Continue;
-        
+
         if (player != null && !player.IsPlayer())
             return HookResult.Continue;
-        
+
         SendDiscordMessage(false, player, message);
-        
+
         return HookResult.Continue;
     }
+
     private HookResult OnSayTeam(CCSPlayerController? player, CommandInfo info)
     {
         Console.WriteLine("[DiscordChatSync] OnSayTeam");
         if (!_plugin.Config.SyncTeamChat)
             return HookResult.Continue;
-        
-        if (!ShouldSyncMessage(info.GetArg(1), out var message)) 
+
+        if (!ShouldSyncMessage(info.GetArg(1), out var message))
             return HookResult.Continue;
-        
+
         if (!player.IsPlayer())
             return HookResult.Continue;
-        
+
         SendDiscordMessage(true, player!, message);
-        
+
         return HookResult.Continue;
     }
+
     public void OnMapStart(string mapName)
     {
         // print any message to specific channel
@@ -220,23 +239,24 @@ public class DiscordService : BackgroundService
     private bool ShouldSyncMessage(string inMessage, out string outMessage)
     {
         outMessage = inMessage.Trim();
-     
+
         if (string.IsNullOrWhiteSpace(outMessage))
             return false;
-        
+
         // no prefix means we want all messages
-        if (string.IsNullOrEmpty(_plugin.Config.MessagePrefix)) 
+        if (string.IsNullOrEmpty(_plugin.Config.MessagePrefix))
             return true;
-        
+
         // ignore messages that don't start with the prefix
         if (!outMessage.StartsWith(_plugin.Config.MessagePrefix))
             return false;
-            
+
         // remove the prefix from the message
         outMessage = outMessage[_plugin.Config.MessagePrefix.Length..].Trim();
 
         return true;
     }
+
     private void SendDiscordMessage(bool teamOnly, CCSPlayerController? player, string message)
     {
         if (_plugin.Config.SyncChannelId == 0)
@@ -272,7 +292,7 @@ public class DiscordService : BackgroundService
                 _ => ""
             };
         }
-        
+
         var embed = new EmbedBuilder()
             .WithAuthor(chatType + (player?.PlayerName ?? "Console"))
             .WithDescription(message)
