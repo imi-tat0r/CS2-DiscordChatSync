@@ -35,8 +35,8 @@ CS2 Discord Chat Sync is a plugin for Counter-Strike 2 that syncs chat between t
   "AdditionalReadChannelIds": [], // additional channels to read from (for news and announcements)
   "SyncTeamChat": false, // if false, team chat will not be synced
   "MessagePrefix": "", // only messages starting with the prefix will be synced
-  "IgnoreChatTriggers": true // chat and silent triggers from core config will be ignored
-  "ConfigVersion": 1, // do not change
+  "IgnoreChatTriggers": true, // chat and silent triggers from core config will be ignored
+  "ConfigVersion": 1 // do not change
 }
 ```
 
