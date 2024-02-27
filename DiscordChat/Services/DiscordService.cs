@@ -156,7 +156,11 @@ public class DiscordService : BackgroundService
         if (player != null && !player.IsPlayer())
             return HookResult.Continue;
 
-        SendDiscordMessage(false, player, message);
+        // print any message to specific channel
+        if (_client?.GetChannel(_plugin.Config.SyncChannelId) is not IMessageChannel channel)
+            return HookResult.Continue;
+        
+        _messageService.SyncChatMessage(channel, player, false, message);
 
         return HookResult.Continue;
     }
@@ -170,7 +174,11 @@ public class DiscordService : BackgroundService
         if (!player.IsPlayer())
             return HookResult.Continue;
 
-        SendDiscordMessage(true, player!, message);
+        // print any message to specific channel
+        if (_client?.GetChannel(_plugin.Config.SyncChannelId) is not IMessageChannel channel)
+            return HookResult.Continue;
+        
+        _messageService.SyncChatMessage(channel, player, true, message);
 
         return HookResult.Continue;
     }
@@ -188,62 +196,6 @@ public class DiscordService : BackgroundService
             .Build();
 
         channel.SendMessageAsync(embed: embed);
-    }
-
-    #endregion
-
-    #region Helpers
-
-    private void SendDiscordMessage(bool teamOnly, CCSPlayerController? player, string message)
-    {
-        if (_plugin.Config.SyncChannelId == 0)
-        {
-            for (var i = 0; i < 3; i++)
-                Console.WriteLine("[DiscordChatSync] Sync channel id is not set. Please set it in the config file.");
-            return;
-        }
-
-        // print any message to specific channel
-        if (_client?.GetChannel(_plugin.Config.SyncChannelId) is not IMessageChannel channel)
-            return;
-
-        var teamColor = (player?.TeamNum ?? (byte)CsTeam.None) switch
-        {
-            (byte)CsTeam.Terrorist => ColorHelper.ChatColorToHexColor(ChatColors.Orange),
-            (byte)CsTeam.CounterTerrorist => ColorHelper.ChatColorToHexColor(ChatColors.Blue),
-            (byte)CsTeam.Spectator => ColorHelper.ChatColorToHexColor(ChatColors.Grey),
-            _ => System.Drawing.Color.White
-        };
-
-        var discordColor = new Color(teamColor.R, teamColor.G, teamColor.B);
-
-        var chatType = "[ALL] - ";
-
-        if (teamOnly)
-        {
-            chatType = player?.TeamNum switch
-            {
-                (byte)CsTeam.Terrorist => "[T] - ",
-                (byte)CsTeam.CounterTerrorist => "[CT] - ",
-                (byte)CsTeam.Spectator => "[Spec] - ",
-                _ => ""
-            };
-        }
-
-        var embed = new EmbedBuilder()
-            .WithAuthor(chatType + (player?.PlayerName ?? "Console"))
-            .WithDescription(message)
-            .WithColor(discordColor)
-            .Build();
-
-        try
-        {
-            channel.SendMessageAsync(embed: embed);
-        }
-        catch (Exception e)
-        {
-            Console.WriteLine($"Exception: {e}");
-        }
     }
 
     #endregion

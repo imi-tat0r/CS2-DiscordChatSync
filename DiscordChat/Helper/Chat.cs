@@ -1,5 +1,11 @@
 ﻿using System.Reflection;
+using CounterStrikeSharp.API;
+using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Utils;
+using Discord;
+using Discord.WebSocket;
+using DiscordChat.Extensions;
+using Serilog;
 
 namespace DiscordChat.Helper;
 
@@ -42,24 +48,13 @@ public static class Chat
         return newLine;
     }
     
-    // take template + varargs
-    public static IEnumerable<string> FormatDiscordMessageForChat(string messageTemplate, string channel, string username, string userColor, List<string> messageParts)
+    public static IEnumerable<string> FormatDiscordMessageForChat(string messageTemplate, SocketUserMessage message, SocketGuildUser user, List<string> messageParts)
     {
         if (messageParts.Count == 0)
             return Array.Empty<string>();
         
-        var firstLine = messageTemplate;
-        
-        firstLine = FormatColorChatInMessage(firstLine);
-        firstLine = FormatConstantsInChatMessage(firstLine);
-        
-        firstLine = firstLine.Replace("{Channel}", channel);
-        firstLine = firstLine.Replace("{Username}", username);
-        firstLine = firstLine.Replace("{UsernameStyled}", $"{ColorHelper.HexColorToChatColor(userColor)}{username}{ChatColors.Default}");
-        
-        // if we have multiple lines, they are printed separately. If we have only one line, we print it inline 
-        firstLine = firstLine.Replace("{Message}", messageParts[0]);
-        
+        var firstLine = ApplyChatMessageFormat(messageTemplate, message, user, messageParts);
+
         var lines = new List<string> { firstLine };
         
         if (messageParts.Count <= 1)
@@ -68,18 +63,105 @@ public static class Chat
         lines.AddRange(messageParts.Skip(1));
         return lines;
     }
+    public static Embed FormatChatMessageForDiscord(Dictionary<string, string> embedFormat, Dictionary<string, string> embedFields, Dictionary<string, string> dynamicReplacements, CCSPlayerController? player, bool teamOnly, string message)
+    {
+        var embed = new EmbedBuilder();
+
+        var chatTeam = teamOnly ? $"{player.GetTeamString(true)}" : "All";
+        
+        dynamicReplacements.Add("{Chat.Message}", message);
+        dynamicReplacements.Add("{Chat.Team}", chatTeam);
+        
+        foreach (var format in embedFormat)
+        {
+            switch (format.Key)
+            {
+                case "Author":
+                    if (!string.IsNullOrEmpty(embedFormat["AvatarUrl"]))
+                        embed.WithAuthor(ApplyDiscordMessageFormat(embedFormat["Author"], dynamicReplacements), embedFormat["AvatarUrl"]);
+                    else
+                        embed.WithAuthor(ApplyDiscordMessageFormat(embedFormat["Author"], dynamicReplacements));
+                    break;
+                case "Title":
+                    embed.WithTitle(ApplyDiscordMessageFormat(embedFormat["Title"], dynamicReplacements));
+                    break;
+                case "ThumbnailUrl":
+                    embed.WithThumbnailUrl(embedFormat["ThumbnailUrl"]);
+                    break;
+                case "Footer":
+                    embed.WithFooter(ApplyDiscordMessageFormat(embedFormat["Footer"], dynamicReplacements));
+                    break;
+                case "Color":
+                    if (embedFormat["Color"] == "{TeamColor}")
+                        embed.WithColor(ColorHelper.ChatColorToDiscordColor(player.GetChatColor()));
+                    else if (embedFormat["Color"].StartsWith("#") && embedFormat["Color"].Length == 7)
+                        embed.WithColor(ColorHelper.HexColorToDiscordColor(embedFormat["Color"]));
+                    else
+                        Log.Error("Invalid color format in DiscordEmbedFormat");
+                    break;
+            }
+        }
+        
+        foreach (var field in embedFields)
+        {
+            embed.AddField(ApplyDiscordMessageFormat(field.Key, dynamicReplacements),
+                ApplyDiscordMessageFormat(field.Value, dynamicReplacements));
+        }
+        
+        return embed.Build();
+    }
+
+    private static string ApplyChatMessageFormat(string messageTemplate, SocketMessage message, SocketGuildUser user,
+        IReadOnlyList<string> messageParts)
+    {
+        var firstLine = messageTemplate;
+        
+        firstLine = FormatColorInChatMessage(firstLine);
+        firstLine = FormatConstantsInMessage(firstLine);
+        
+        var dynamicReplacements = new Dictionary<string, string>
+        {
+            { "{Channel}", message.Channel.Name },
+            { "{Username}", user.DisplayName },
+            { "{UsernameStyled}", $"{ColorHelper.HexColorToChatColor(user.GetHighestRole().GetHexColor())}{user}{ChatColors.Default}" },
+        };
+        
+        firstLine = FormatDynamicReplacements(firstLine, dynamicReplacements);
+        
+        // if we have multiple lines, they are printed separately. If we have only one line, we print it inline 
+        firstLine = firstLine.Replace("{Message}", messageParts[0]);
+        return firstLine;
+    }
     
-    private static string FormatColorChatInMessage(string message)
+    private static string ApplyDiscordMessageFormat(string messageTemplate,
+        Dictionary<string, string> dynamicReplacements)
+    {
+        var message = messageTemplate;
+        
+        message = FormatConstantsInMessage(message);
+        message = FormatDynamicReplacements(message, dynamicReplacements);
+        
+        return message;
+    }
+    
+    private static string FormatColorInChatMessage(string message)
     {
         foreach (var color in ChatColorTemplateVariables)
             message = message.Replace(color.Key, $"{color.Value}");
 
         return message;
     }
-    private static string FormatConstantsInChatMessage(string message)
+    private static string FormatConstantsInMessage(string message)
     {
         foreach (var constant in OtherTemplateVariables)
             message = constant.Value(message);
+
+        return message;
+    }
+    private static string FormatDynamicReplacements(string message, Dictionary<string, string> dynamicReplacements)
+    {
+        foreach (var replacement in dynamicReplacements)
+            message = message.Replace(replacement.Key, replacement.Value);
 
         return message;
     }

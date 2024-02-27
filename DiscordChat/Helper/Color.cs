@@ -1,5 +1,6 @@
 ﻿using System.Drawing;
 using CounterStrikeSharp.API.Modules.Utils;
+using Color = Discord.Color;
 
 namespace DiscordChat.Helper;
 
@@ -36,14 +37,21 @@ public static class ColorHelper
         }
 
         var targetColor = ColorTranslator.FromHtml(hexColorCode);
-        var closestColor = FindClosestColor(targetColor, PredefinedColors.Keys);
+        var closestColor =
+            FindClosestColor(new Color(targetColor.R, targetColor.G, targetColor.B), PredefinedColors.Keys);
         
         return PredefinedColors.TryGetValue(closestColor, out var symbol) ? symbol : ChatColors.Default;
     }
-    public static Color ChatColorToHexColor(char chatColor)
+    public static Color HexColorToDiscordColor(string hexColorCode)
+    {
+        var color = ColorTranslator.FromHtml(hexColorCode);
+        return new Color(color.R, color.G, color.B);
+    }
+    public static Color ChatColorToDiscordColor(char chatColor)
     {
         var hex = PredefinedColors.FirstOrDefault(x => x.Value == chatColor).Key ?? "#ffffff";
-        return ColorTranslator.FromHtml(hex);
+        var clr = ColorTranslator.FromHtml(hex);
+        return new Color(clr.R, clr.G, clr.B);
     }
 
     private static string FindClosestColor(Color targetColor, IEnumerable<string> colorHexCodes)
@@ -54,7 +62,7 @@ public static class ColorHelper
         foreach (var hexCode in colorHexCodes)
         {
             var color = ColorTranslator.FromHtml(hexCode);
-            var distance = ColorDistance(targetColor, color);
+            var distance = ColorDistance(targetColor, new Color(color.R, color.G, color.B));
 
             if (!(distance < minDistance))
                 continue;
@@ -65,7 +73,6 @@ public static class ColorHelper
 
         return closestColor ?? "#ffffff";
     }
-
     private static double ColorDistance(Color color1, Color color2)
     {
         var rDiff = color1.R - color2.R;

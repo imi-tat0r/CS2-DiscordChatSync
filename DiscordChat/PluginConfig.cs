@@ -13,19 +13,28 @@ public class ChatFormatOptions
 
     [JsonPropertyName("SyncPrefix")] public string SyncTrigger { get; set; } = "";
 
-    [JsonPropertyName("DiscordOutputFormat")]
-    public Dictionary<string, string> DiscordOutputFormat { get; set; } = new()
+    [JsonPropertyName("DiscordEmbedFields")]
+    public Dictionary<string, string> DiscordEmbedFields { get; set; } = new()
     {
-        {":ballot_box_with_check: Player", "{PlayerName}"},
-        {"SteamID", "{SteamID}"},
-        {"Clickable Link", "[{PlayerName}](https://steamcommunity.com/profiles/{SteamID})"},
-        {"Team", "{Team}"},
-        {"Message", "{Message}"},
-        {"Server", "{ServerName}"},
-        {"Map", "{MapName}"},
-        {"Players", "{PlayerCount}/{MaxPlayers}"},
+        {"Server", "{Server.Name}"},
+        {"Map", "{Server.MapName}"},
+        {"Players", "{Server.CurPlayers}/{Server.MaxPlayers}"},
+        {"Clickable Link", "[{Player.Name} ({Player.SteamID})](https://steamcommunity.com/profiles/{Player.SteamID})"},
+        {"Team", "{Player.TeamName} - {Player.Team} - Num: {Player.TeamNum}"},
+        {"Message", "[{Chat.Team}] - {Chat.Message}"},
         {"Time", "{Time}"},
         {"Date", "{Date}"}
+    };
+    
+    [JsonPropertyName("DiscordEmbedFormat")]
+    public Dictionary<string, string> DiscordEmbedFormat { get; set; } = new()
+    {
+        {"Author", "{Server.Name}"},
+        {"AvatarUrl", "https://hvh.gg/assets/img/logo_colored.png"},
+        {"Title", "Message from {Player.Name}"},
+        {"ThumbnailUrl", "https://hvh.gg/assets/img/logo_colored.png"},
+        {"Footer", "https://github.com/imi-tat0r/CS2-DiscordChatSync"},
+        {"Color", "{TeamColor}"}
     };
 }
 

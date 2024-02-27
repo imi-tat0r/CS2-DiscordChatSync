@@ -2,11 +2,11 @@
 using System.Text.Json;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
-using CounterStrikeSharp.API.Core.Attributes;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
-using CounterStrikeSharp.API.Modules.Utils;
+using CounterStrikeSharp.API.Modules.Cvars;
+using DiscordChat.Extensions;
 using DiscordChat.Helper;
 using DiscordChat.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,12 +16,18 @@ namespace DiscordChat;
 public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
 {
     public override string ModuleName => "CS2-DiscordChatSync";
-    public override string ModuleVersion => "1.0.3";
+    public override string ModuleVersion => "1.1.0.0";
     public override string ModuleAuthor => "imi-tat0r";
     public override string ModuleDescription => "Syncs chat messages from and to a discord channel.";
     public DiscordChatSyncConfig Config { get; set; } = new();
     
     private IServiceProvider? _serviceProvider = null;
+    
+    private static readonly string AssemblyName = Assembly.GetExecutingAssembly().GetName().Name ?? "";
+    private static readonly string CfgPath = $"{Server.GameDirectory}/csgo/addons/counterstrikesharp/configs/plugins/{AssemblyName}/{AssemblyName}.json";
+    
+    public ConVar? CvarHostName { get; set; }
+    public int CurPlayers { get; set; } = 0;
     
     public void OnConfigParsed(DiscordChatSyncConfig syncConfig)
     {
@@ -49,6 +55,8 @@ public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
     {
         base.Load(hotReload);
 
+        CvarHostName = ConVar.Find("hostname");
+        
         Console.WriteLine("[DiscordChatSync] Start loading DiscordChatSync plugin");
 
         Console.WriteLine("[DiscordChatSync] Add services to DI container");
@@ -65,10 +73,19 @@ public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
 
         var discordService = _serviceProvider.GetRequiredService<DiscordService>();
         RegisterListener<Listeners.OnMapStart>(discordService.OnMapStart);
+        RegisterListener<Listeners.OnClientDisconnect>(client =>
+        {
+            CurPlayers = Utilities.GetPlayers().Count(p => p.IsPlayer());
+        });
+
+        RegisterEventHandler<EventPlayerConnectFull>((@event, info) =>
+        {
+            CurPlayers = Utilities.GetPlayers().Count(p => p.IsPlayer());
+            return HookResult.Continue;
+        });
         Console.WriteLine("[DiscordChatSync] Event handlers registered");
 
         Console.WriteLine("[DiscordChatSync] Registering global command handler");
-        
         AddCommandListener(null, discordService.OnClientCommandGlobalPre);
         Console.WriteLine("[DiscordChatSync] Global command handler registered");
         
@@ -85,5 +102,22 @@ public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
 
         base.Unload(hotReload);
         Console.WriteLine("[DiscordChatSync] Done unloading plugin");
+    }
+    
+    [ConsoleCommand("css_reload_cfg", "Reload the config in the current session without restarting the server")]
+    [RequiresPermissions("@css/generic")]
+    [CommandHelper(minArgs: 0, whoCanExecute: CommandUsage.CLIENT_AND_SERVER)]
+    public void OnReloadConfigCommand(CCSPlayerController? player, CommandInfo info)
+    {
+        var config = File.ReadAllText(CfgPath);
+        try
+        {
+            OnConfigParsed(JsonSerializer.Deserialize<DiscordChatSyncConfig>(config,
+                new JsonSerializerOptions() { ReadCommentHandling = JsonCommentHandling.Skip })!);
+        }
+        catch (Exception e)
+        {
+            info.ReplyToCommand($"[DiscordChatSync] Failed to reload config: {e.Message}");
+        }
     }
 }
