@@ -16,11 +16,8 @@ public class ChatFormatOptions
     [JsonPropertyName("DiscordEmbedFields")]
     public Dictionary<string, string> DiscordEmbedFields { get; set; } = new()
     {
-        {"Server", "{Server.Name}"},
-        {"Map", "{Server.MapName}"},
-        {"Players", "{Server.CurPlayers}/{Server.MaxPlayers}"},
-        {"Player", "[{Player.Name} ({Player.SteamID})](https://steamcommunity.com/profiles/{Player.SteamID})"},
-        {"Team", "{Player.TeamName} - {Player.Team} - Num: {Player.TeamNum}"},
+        {"Player", "{Player.Name}"},
+        {"SteamID", "[{Player.SteamID}](https://steamcommunity.com/profiles/{Player.SteamID})"},
         {"Message", "[{Chat.Team}] - {Chat.Message}"},
         {"Time", "{Time}"},
         {"Date", "{Date}"}
@@ -30,10 +27,11 @@ public class ChatFormatOptions
     public Dictionary<string, string> DiscordEmbedFormat { get; set; } = new()
     {
         {"Author", "{Server.Name}"},
-        {"AvatarUrl", "https://cdn2.steamgriddb.com/icon/e1bd06c3f8089e7552aa0552cb387c92/32/512x512.png"},
+        {"AvatarUrl", ""},
         {"Title", "Message from {Player.Name}"},
-        {"ThumbnailUrl", "https://cdn2.steamgriddb.com/icon/e1bd06c3f8089e7552aa0552cb387c92/32/512x512.png"},
+        {"ThumbnailUrl", ""},
         {"Footer", "https://github.com/imi-tat0r/CS2-DiscordChatSync"},
+        {"FooterIconUrl", ""},
         {"Color", "{TeamColor}"}
     };
 }

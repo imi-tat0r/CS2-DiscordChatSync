@@ -77,21 +77,35 @@ public static class Chat
             switch (format.Key)
             {
                 case "Author":
+                    if (string.IsNullOrEmpty(embedFormat["Author"]))
+                        break;
+                    
                     if (!string.IsNullOrEmpty(embedFormat["AvatarUrl"]))
                         embed.WithAuthor(ApplyDiscordMessageFormat(embedFormat["Author"], dynamicReplacements), embedFormat["AvatarUrl"]);
                     else
                         embed.WithAuthor(ApplyDiscordMessageFormat(embedFormat["Author"], dynamicReplacements));
                     break;
                 case "Title":
-                    embed.WithTitle(ApplyDiscordMessageFormat(embedFormat["Title"], dynamicReplacements));
+                    if (!string.IsNullOrEmpty(embedFormat["Title"]))
+                        embed.WithTitle(ApplyDiscordMessageFormat(embedFormat["Title"], dynamicReplacements));
                     break;
                 case "ThumbnailUrl":
-                    embed.WithThumbnailUrl(embedFormat["ThumbnailUrl"]);
+                    if (!string.IsNullOrEmpty(embedFormat["ThumbnailUrl"]))
+                        embed.WithThumbnailUrl(embedFormat["ThumbnailUrl"]);
                     break;
                 case "Footer":
-                    embed.WithFooter(ApplyDiscordMessageFormat(embedFormat["Footer"], dynamicReplacements));
+                    if (string.IsNullOrEmpty(embedFormat["Footer"]))
+                        break;
+
+                    if (!string.IsNullOrEmpty(embedFormat["FooterIconUrl"]))
+                        embed.WithFooter(ApplyDiscordMessageFormat(embedFormat["Footer"], dynamicReplacements), embedFormat["FooterIconUrl"]);
+                    else
+                        embed.WithFooter(ApplyDiscordMessageFormat(embedFormat["Footer"], dynamicReplacements));
                     break;
                 case "Color":
+                    if (string.IsNullOrEmpty(embedFormat["Color"]))
+                        break;
+                    
                     if (embedFormat["Color"] == "{TeamColor}")
                         embed.WithColor(ColorHelper.ChatColorToDiscordColor(player.GetChatColor()));
                     else if (embedFormat["Color"].StartsWith("#") && embedFormat["Color"].Length == 7)
