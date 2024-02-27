@@ -118,12 +118,14 @@ public static class Chat
         
         firstLine = FormatColorInChatMessage(firstLine);
         firstLine = FormatConstantsInMessage(firstLine);
+
+        var username = user.Nickname ?? user.DisplayName;
         
         var dynamicReplacements = new Dictionary<string, string>
         {
             { "{Channel}", message.Channel.Name },
-            { "{Username}", user.DisplayName },
-            { "{UsernameStyled}", $"{ColorHelper.HexColorToChatColor(user.GetHighestRole().GetHexColor())}{user}{ChatColors.Default}" },
+            { "{Username}", username },
+            { "{UsernameStyled}", $"{ColorHelper.HexColorToChatColor(user.GetHighestRole().GetHexColor())}{username}{ChatColors.Default}" },
         };
         
         firstLine = FormatDynamicReplacements(firstLine, dynamicReplacements);
