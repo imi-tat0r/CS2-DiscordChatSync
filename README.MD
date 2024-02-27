@@ -45,6 +45,11 @@ The following placeholders can be used in the `ServerOutputFormat` to dynamicall
 - `{Date}` - The current date according to `DateFormat`
 - [More Information](https://learn.microsoft.com/dotnet/standard/base-types/custom-date-and-time-format-strings)
 
+### 1.3. Colors
+- You can use the following colors:`{Default}`, `{White}`, `{DarkRed}`, `{Green}`, `{LightYellow}`, `{LightBlue}`, `{Olive}`, `{Lime}`, `{Red}`, `{LightPurple}`, `{Purple}`, `{Grey}`, `{Yellow}`, `{Gold}`, `{Silver}`, `{Blue}`, `{DarkBlue}`, `{BlueGrey}`, `{Magenta}`, `{LightRed}`, `{Orange}`
+
+
+  Example: `{Green}some {Blue}colored {Red}text{Default} some default text`
 
 ## 2. CS2 => Discord
 The following placeholders can be used in the `DiscordEmbedFormat` and the `DiscordEmbedFields` to dynamically display certain information about the server or the player.
