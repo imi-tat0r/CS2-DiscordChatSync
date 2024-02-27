@@ -9,7 +9,7 @@ public class ChatFormatOptions
     [JsonPropertyName("DateFormat")] public string DateFormat { get; set; } = "dd.MM.yyyy";
 
     [JsonPropertyName("ServerOutputFormat")]
-    public string ServerOutputFormat { get; set; } = "[Discord - {Channel}] {UsernameStyled} ({Date} {Time}): {Message}";
+    public string ServerOutputFormat { get; set; } = "[Discord - {Channel}] {UsernameStyled}: {Message}";
 
     [JsonPropertyName("SyncPrefix")] public string SyncTrigger { get; set; } = "";
 
@@ -18,17 +18,15 @@ public class ChatFormatOptions
     {
         {"Player", "{Player.Name}"},
         {"SteamID", "[{Player.SteamID}](https://steamcommunity.com/profiles/{Player.SteamID})"},
-        {"Message", "[{Chat.Team}] - {Chat.Message}"},
-        {"Time", "{Time}"},
-        {"Date", "{Date}"}
+        {"Message", "[{Chat.Team}] - {Chat.Message}"}
     };
     
     [JsonPropertyName("DiscordEmbedFormat")]
     public Dictionary<string, string> DiscordEmbedFormat { get; set; } = new()
     {
-        {"Author", "{Server.Name}"},
+        {"Author", ""},
         {"AvatarUrl", ""},
-        {"Title", "Message from {Player.Name}"},
+        {"Title", "{Server.Name}"},
         {"ThumbnailUrl", ""},
         {"Footer", "https://github.com/imi-tat0r/CS2-DiscordChatSync"},
         {"FooterIconUrl", ""},
