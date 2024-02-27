@@ -1,5 +1,4 @@
-﻿using CounterStrikeSharp.API;
-using CounterStrikeSharp.API.Core;
+﻿using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
 using Discord;
@@ -8,16 +7,18 @@ using DiscordChat.Extensions;
 using DiscordChat.Helper;
 using Microsoft.Extensions.Hosting;
 
-namespace DiscordChat;
+namespace DiscordChat.Services;
 
 public class DiscordService : BackgroundService
 {
     private static DiscordSocketClient? _client;
     private readonly DiscordChatSync _plugin;
+    private readonly MessageService _messageService;
 
-    public DiscordService(DiscordChatSync plugin)
+    public DiscordService(DiscordChatSync plugin, MessageService messageService)
     {
         _plugin = plugin;
+        _messageService = messageService;
     }
 
     #region BackgroundService
@@ -106,55 +107,15 @@ public class DiscordService : BackgroundService
 
     private Task MessageReceived(SocketMessage m)
     {
-        // see if the author is the guild user
-        var author = m.Author;
-        if (author is not SocketGuildUser user || user.IsBot || user.IsWebhook || m is not SocketUserMessage msg)
+        // if not a user message, ignore
+        if (!m.Author.GetGuildUser(out var user) || m is not SocketUserMessage msg)
             return Task.CompletedTask;
 
         // see if the message is from the correct channel
-        if (msg.Channel.Id != _plugin.Config.SyncChannelId &&
-            !_plugin.Config.AdditionalReadChannelIds.Contains(msg.Channel.Id))
+        if (!_messageService.ShouldSyncDiscordMessage(msg.Channel.Id))
             return Task.CompletedTask;
-
-        var roles = user.Roles.ToList();
-        var highestRole = roles.MaxBy(x => x.Position);
-
-        var hexColor = highestRole != null
-            ? "#" +
-              highestRole.Color.R.ToString("X2") +
-              highestRole.Color.G.ToString("X2") +
-              highestRole.Color.B.ToString("X2")
-            : "#ffffff";
-
-        Server.NextWorldUpdate(() =>
-        {
-            var firstLine =
-                $"[Discord - {msg.Channel.Name}] {ColorHelper.HexColorToChatColor(hexColor)}{user.DisplayName}{ChatColors.Default}: ";
-
-            // replace emojis with their string counter part
-            // split the message by new lines
-            // remove any empty lines (since it would print the previous line again)
-            var messageSplit = Emojis.ReplaceEmojisInString(msg.CleanContent)
-                .Split('\n')
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .ToArray();
-
-            // if there's any part in the string that's >50 characters without any whitespace, we need to add a whitespace there
-            for (var i = 0; i < messageSplit.Length; i++)
-                messageSplit[i] = Chat.ForceBreakLongWords(messageSplit[i]);
-
-            // if we only have one line, inline the message
-            if (messageSplit.Length == 1)
-                firstLine += messageSplit[0];
-
-            Server.PrintToChatAll(firstLine);
-
-            if (messageSplit.Length <= 1)
-                return;
-
-            foreach (var line in messageSplit)
-                Server.PrintToChatAll(line);
-        });
+        
+        _messageService.SyncDiscordMessage(msg, user);
 
         return Task.CompletedTask;
     }
@@ -188,8 +149,8 @@ public class DiscordService : BackgroundService
 
     private HookResult OnSay(CCSPlayerController? player, CommandInfo info)
     {
-        Console.WriteLine("[DiscordChatSync] OnSay");
-        if (!ShouldSyncMessage(info.GetArg(1), out var message))
+        Console.WriteLine($"[DiscordChatSync] OnSay");
+        if (!_messageService.ShouldSyncChatMessage(info, true, out var message))
             return HookResult.Continue;
 
         if (player != null && !player.IsPlayer())
@@ -202,11 +163,8 @@ public class DiscordService : BackgroundService
 
     private HookResult OnSayTeam(CCSPlayerController? player, CommandInfo info)
     {
-        Console.WriteLine("[DiscordChatSync] OnSayTeam");
-        if (!_plugin.Config.SyncTeamChat)
-            return HookResult.Continue;
-
-        if (!ShouldSyncMessage(info.GetArg(1), out var message))
+        Console.WriteLine($"[DiscordChatSync] OnSayTeam");
+        if (!_messageService.ShouldSyncChatMessage(info, false, out var message))
             return HookResult.Continue;
 
         if (!player.IsPlayer())
@@ -235,27 +193,6 @@ public class DiscordService : BackgroundService
     #endregion
 
     #region Helpers
-
-    private bool ShouldSyncMessage(string inMessage, out string outMessage)
-    {
-        outMessage = inMessage.Trim();
-
-        if (string.IsNullOrWhiteSpace(outMessage))
-            return false;
-
-        // no prefix means we want all messages
-        if (string.IsNullOrEmpty(_plugin.Config.MessagePrefix))
-            return true;
-
-        // ignore messages that don't start with the prefix
-        if (!outMessage.StartsWith(_plugin.Config.MessagePrefix))
-            return false;
-
-        // remove the prefix from the message
-        outMessage = outMessage[_plugin.Config.MessagePrefix.Length..].Trim();
-
-        return true;
-    }
 
     private void SendDiscordMessage(bool teamOnly, CCSPlayerController? player, string message)
     {

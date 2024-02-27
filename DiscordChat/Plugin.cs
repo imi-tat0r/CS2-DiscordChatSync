@@ -1,5 +1,14 @@
-﻿using CounterStrikeSharp.API.Core;
+﻿using System.Reflection;
+using System.Text.Json;
+using CounterStrikeSharp.API;
+using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
+using CounterStrikeSharp.API.Core.Attributes.Registration;
+using CounterStrikeSharp.API.Modules.Admin;
+using CounterStrikeSharp.API.Modules.Commands;
+using CounterStrikeSharp.API.Modules.Utils;
+using DiscordChat.Helper;
+using DiscordChat.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DiscordChat;
@@ -30,6 +39,9 @@ public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
             return;
         }
         
+        Chat.TimeFormat = Config.ChatFormatOptions.TimeFormat;
+        Chat.DateFormat = Config.ChatFormatOptions.DateFormat;
+        
         Console.WriteLine("[DiscordChatSync] Config parsed");
     }
 
@@ -44,6 +56,7 @@ public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
 
         serviceCollection.AddSingleton(this);
         serviceCollection.AddSingleton<DiscordService>();
+        serviceCollection.AddScoped<MessageService>();
 
         _serviceProvider = serviceCollection.BuildServiceProvider();
         Console.WriteLine("[DiscordChatSync] DI container done");
