@@ -16,7 +16,7 @@ namespace DiscordChat;
 public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
 {
     public override string ModuleName => "CS2-DiscordChatSync";
-    public override string ModuleVersion => "1.1.0.0";
+    public override string ModuleVersion => "1.1.0.1";
     public override string ModuleAuthor => "imi-tat0r";
     public override string ModuleDescription => "Syncs chat messages from and to a discord channel.";
     public DiscordChatSyncConfig Config { get; set; } = new();
@@ -47,8 +47,57 @@ public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
         
         Chat.TimeFormat = Config.ChatFormatOptions.TimeFormat;
         Chat.DateFormat = Config.ChatFormatOptions.DateFormat;
+
+        UpdateConfig(syncConfig);
         
         Console.WriteLine("[DiscordChatSync] Config parsed");
+    }
+
+    private static void UpdateConfig<T>(T forType) where T : new()
+    {
+        var jsonContent = File.ReadAllText(CfgPath);
+        var currentConfigDict = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonContent, new JsonSerializerOptions() { ReadCommentHandling = JsonCommentHandling.Skip });
+        var defaultConfigDict = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(new T()), new JsonSerializerOptions() { ReadCommentHandling = JsonCommentHandling.Skip });
+
+        // Check if the CurrentVersion is different
+        if (currentConfigDict == null || defaultConfigDict == null || 
+            currentConfigDict["ConfigVersion"] == defaultConfigDict["ConfigVersion"])
+            return;
+        
+        var needsUpdate = false;
+
+        // Add missing keys
+        foreach (var key in defaultConfigDict!.Keys)
+        {
+            if (currentConfigDict.ContainsKey(key))
+                continue;
+            
+            currentConfigDict[key] = defaultConfigDict[key];
+            needsUpdate = true;
+        }
+
+        // Remove extra keys
+        var keysToRemove = new List<string>();
+        foreach (var key in currentConfigDict!.Keys)
+        {
+            if (defaultConfigDict.ContainsKey(key))
+                continue;
+
+            keysToRemove.Add(key);
+            needsUpdate = true;
+        }
+        
+        foreach (var key in keysToRemove)
+            currentConfigDict.Remove(key);
+
+        // Update the CurrentVersion
+        currentConfigDict["ConfigVersion"] = defaultConfigDict["ConfigVersion"];
+
+        if (!needsUpdate) 
+            return;
+        
+        var updatedJsonContent = JsonSerializer.Serialize(currentConfigDict, new JsonSerializerOptions { WriteIndented = true });
+        File.WriteAllText(CfgPath, updatedJsonContent);
     }
 
     public override void Load(bool hotReload)

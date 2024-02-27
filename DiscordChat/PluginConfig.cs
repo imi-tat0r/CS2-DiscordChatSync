@@ -19,7 +19,7 @@ public class ChatFormatOptions
         {"Server", "{Server.Name}"},
         {"Map", "{Server.MapName}"},
         {"Players", "{Server.CurPlayers}/{Server.MaxPlayers}"},
-        {"Clickable Link", "[{Player.Name} ({Player.SteamID})](https://steamcommunity.com/profiles/{Player.SteamID})"},
+        {"Player", "[{Player.Name} ({Player.SteamID})](https://steamcommunity.com/profiles/{Player.SteamID})"},
         {"Team", "{Player.TeamName} - {Player.Team} - Num: {Player.TeamNum}"},
         {"Message", "[{Chat.Team}] - {Chat.Message}"},
         {"Time", "{Time}"},
@@ -30,9 +30,9 @@ public class ChatFormatOptions
     public Dictionary<string, string> DiscordEmbedFormat { get; set; } = new()
     {
         {"Author", "{Server.Name}"},
-        {"AvatarUrl", "https://hvh.gg/assets/img/logo_colored.png"},
+        {"AvatarUrl", "https://cdn2.steamgriddb.com/icon/e1bd06c3f8089e7552aa0552cb387c92/32/512x512.png"},
         {"Title", "Message from {Player.Name}"},
-        {"ThumbnailUrl", "https://hvh.gg/assets/img/logo_colored.png"},
+        {"ThumbnailUrl", "https://cdn2.steamgriddb.com/icon/e1bd06c3f8089e7552aa0552cb387c92/32/512x512.png"},
         {"Footer", "https://github.com/imi-tat0r/CS2-DiscordChatSync"},
         {"Color", "{TeamColor}"}
     };
@@ -46,7 +46,7 @@ public class DiscordChatSyncConfig : BasePluginConfig
     [JsonPropertyName("SyncTeamChat")] public bool SyncTeamChat { get; set; }
     [JsonPropertyName("MessagePrefix")] public string MessagePrefix { get; set; } = "";
     [JsonPropertyName("IgnoreChatTriggers")] public bool IgnoreChatTriggers { get; set; } = true;
-    
     [JsonPropertyName("ChatFormatOptions")] public ChatFormatOptions ChatFormatOptions { get; set; } = new();
-    
+
+    [JsonPropertyName("ConfigVersion")] public override int Version { get; set; } = 2;
 }
