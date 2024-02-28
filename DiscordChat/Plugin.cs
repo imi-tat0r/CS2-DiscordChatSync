@@ -53,50 +53,23 @@ public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
         Console.WriteLine("[DiscordChatSync] Config parsed");
     }
 
-    private static void UpdateConfig<T>(T forType) where T : new()
+    // NOTE: the loaded config always has all properties (missing ones are set to their default values)
+    // serializing the loaded config back to json will result in a json file with all properties
+    // even the ones that were previously not set in the config file
+    private static void UpdateConfig<T>(T config) where T : BasePluginConfig, new()
     {
-        var jsonContent = File.ReadAllText(CfgPath);
-        var currentConfigDict = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonContent, new JsonSerializerOptions() { ReadCommentHandling = JsonCommentHandling.Skip });
-        var defaultConfigDict = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(new T()), new JsonSerializerOptions() { ReadCommentHandling = JsonCommentHandling.Skip });
-
-        // Check if the CurrentVersion is different
-        if (currentConfigDict == null || defaultConfigDict == null || 
-            currentConfigDict["ConfigVersion"] == defaultConfigDict["ConfigVersion"])
+        // get current config version
+        var newCfgVersion = new T().Version;
+        
+        // loaded config is up to date
+        if (config.Version == newCfgVersion)
             return;
         
-        var needsUpdate = false;
-
-        // Add missing keys
-        foreach (var key in defaultConfigDict!.Keys)
-        {
-            if (currentConfigDict.ContainsKey(key))
-                continue;
-            
-            currentConfigDict[key] = defaultConfigDict[key];
-            needsUpdate = true;
-        }
-
-        // Remove extra keys
-        var keysToRemove = new List<string>();
-        foreach (var key in currentConfigDict!.Keys)
-        {
-            if (defaultConfigDict.ContainsKey(key))
-                continue;
-
-            keysToRemove.Add(key);
-            needsUpdate = true;
-        }
+        // update the version
+        config.Version = newCfgVersion;
         
-        foreach (var key in keysToRemove)
-            currentConfigDict.Remove(key);
-
-        // Update the CurrentVersion
-        currentConfigDict["ConfigVersion"] = defaultConfigDict["ConfigVersion"];
-
-        if (!needsUpdate) 
-            return;
-        
-        var updatedJsonContent = JsonSerializer.Serialize(currentConfigDict, new JsonSerializerOptions { WriteIndented = true });
+        // serialize the updated config back to json
+        var updatedJsonContent = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(CfgPath, updatedJsonContent);
     }
 
@@ -113,31 +86,39 @@ public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
 
         serviceCollection.AddSingleton(this);
         serviceCollection.AddSingleton<DiscordService>();
+        serviceCollection.AddSingleton<ChatService>();
         serviceCollection.AddScoped<MessageService>();
 
         _serviceProvider = serviceCollection.BuildServiceProvider();
         Console.WriteLine("[DiscordChatSync] DI container done");
 
         Console.WriteLine("[DiscordChatSync] Registering event handlers");
-
-        var discordService = _serviceProvider.GetRequiredService<DiscordService>();
-        RegisterListener<Listeners.OnMapStart>(discordService.OnMapStart);
-        RegisterListener<Listeners.OnClientDisconnect>(client =>
+        var messageService = _serviceProvider.GetRequiredService<MessageService>();
+        RegisterListener<Listeners.OnMapStart>(_ =>
+        {
+            messageService.SyncSystemMessage("MapChange", null);
+        });
+        
+        RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
             CurPlayers = Utilities.GetPlayers().Count(p => p.IsPlayer());
+            messageService.SyncSystemMessage("PlayerDisconnect", @event.Userid);
+            return HookResult.Continue;
         });
-
         RegisterEventHandler<EventPlayerConnectFull>((@event, info) =>
         {
             CurPlayers = Utilities.GetPlayers().Count(p => p.IsPlayer());
+            messageService.SyncSystemMessage("PlayerConnect", @event.Userid);
             return HookResult.Continue;
         });
         Console.WriteLine("[DiscordChatSync] Event handlers registered");
 
         Console.WriteLine("[DiscordChatSync] Registering global command handler");
-        AddCommandListener(null, discordService.OnClientCommandGlobalPre);
+        var chatService = _serviceProvider.GetRequiredService<ChatService>();
+        AddCommandListener(null, chatService.OnClientCommandGlobalPre);
         Console.WriteLine("[DiscordChatSync] Global command handler registered");
         
+        var discordService = _serviceProvider.GetRequiredService<DiscordService>();
         discordService.StartAsync(new CancellationToken());
 
         Console.WriteLine("[DiscordChatSync] Plugin loaded");

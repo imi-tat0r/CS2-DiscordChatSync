@@ -3,6 +3,7 @@ using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Utils;
 using Discord;
 using Discord.WebSocket;
+using DiscordChat.Enums;
 using DiscordChat.Extensions;
 using DiscordChat.Helper;
 using Microsoft.Extensions.Hosting;
@@ -11,7 +12,7 @@ namespace DiscordChat.Services;
 
 public class DiscordService : BackgroundService
 {
-    private static DiscordSocketClient? _client;
+    public static DiscordSocketClient? Client;
     private readonly DiscordChatSync _plugin;
     private readonly MessageService _messageService;
 
@@ -32,10 +33,10 @@ public class DiscordService : BackgroundService
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
         Console.WriteLine("[DiscordChatSync] Stopping DiscordService");
-        if (_client != null)
+        if (Client != null)
         {
-            await _client.StopAsync();
-            await _client.LogoutAsync();
+            await Client.StopAsync();
+            await Client.LogoutAsync();
         }
 
         await base.StopAsync(cancellationToken);
@@ -77,7 +78,7 @@ public class DiscordService : BackgroundService
         await c.LoginAsync(TokenType.Bot, _plugin.Config.DiscordToken);
         await c.StartAsync();
 
-        _client = c;
+        Client = c;
 
         await Task.Delay(-1, stoppingToken);
 
@@ -88,14 +89,14 @@ public class DiscordService : BackgroundService
     {
         Console.WriteLine("[DiscordChatSync] Ready?");
 
-        if (_client == null)
+        if (Client == null)
             return;
 
         try
         {
             // update info
-            await _client.SetStatusAsync(UserStatus.Online);
-            await _client.SetGameAsync($"Syncing chat messages");
+            await Client.SetStatusAsync(UserStatus.Online);
+            await Client.SetGameAsync($"Syncing chat messages");
 
             Console.WriteLine("[DiscordChatSync] Ready!");
         }
@@ -111,91 +112,24 @@ public class DiscordService : BackgroundService
         if (!m.Author.GetGuildUser(out var user) || m is not SocketUserMessage msg)
             return Task.CompletedTask;
 
-        // see if the message is from the correct channel
-        if (!_messageService.ShouldSyncDiscordMessage(msg.Channel.Id))
-            return Task.CompletedTask;
-        
-        _messageService.SyncDiscordMessage(msg, user);
+        var type = _messageService.GetDiscordMessageType(m);
+
+        switch (type)
+        {
+            case DiscordMessageType.Unknown:
+                break;
+            case DiscordMessageType.Rcon:
+                _messageService.HandleRconDiscordMessage(msg);
+                break;
+            case DiscordMessageType.Chat:
+            case DiscordMessageType.Broadcast:
+                _messageService.SyncDiscordMessage(msg, user);
+                break;
+            default:
+                break;
+        }
 
         return Task.CompletedTask;
-    }
-
-    #endregion
-
-    #region CS2
-
-    public HookResult OnClientCommandGlobalPre(CCSPlayerController? player, CommandInfo info)
-    {
-        if (info.ArgCount < 2)
-            return HookResult.Continue;
-        
-        var command = info.GetArg(0);
-        var message = info.GetArg(1);
-
-        if (command != "say" && command != "say_team")
-            return HookResult.Continue;
-
-        if (string.IsNullOrWhiteSpace(message))
-            return HookResult.Continue;
-        
-        var isChatTrigger = CoreConfig.PublicChatTrigger.Contains(message[0].ToString()) ||
-                           CoreConfig.SilentChatTrigger.Contains(message[0].ToString());
-
-        if (_plugin.Config.IgnoreChatTriggers && isChatTrigger)
-            return HookResult.Continue;
-
-        return command == "say" ? OnSay(player, info) : OnSayTeam(player, info);
-    }
-
-    private HookResult OnSay(CCSPlayerController? player, CommandInfo info)
-    {
-        Console.WriteLine($"[DiscordChatSync] OnSay");
-        if (!_messageService.ShouldSyncChatMessage(info, true, out var message))
-            return HookResult.Continue;
-
-        if (player != null && !player.IsPlayer())
-            return HookResult.Continue;
-
-        // print any message to specific channel
-        if (_client?.GetChannel(_plugin.Config.SyncChannelId) is not IMessageChannel channel)
-            return HookResult.Continue;
-        
-        _messageService.SyncChatMessage(channel, player, false, message);
-
-        return HookResult.Continue;
-    }
-
-    private HookResult OnSayTeam(CCSPlayerController? player, CommandInfo info)
-    {
-        Console.WriteLine($"[DiscordChatSync] OnSayTeam");
-        if (!_messageService.ShouldSyncChatMessage(info, false, out var message))
-            return HookResult.Continue;
-
-        if (!player.IsPlayer())
-            return HookResult.Continue;
-
-        // print any message to specific channel
-        if (_client?.GetChannel(_plugin.Config.SyncChannelId) is not IMessageChannel channel)
-            return HookResult.Continue;
-        
-        _messageService.SyncChatMessage(channel, player, true, message);
-
-        return HookResult.Continue;
-    }
-
-    public void OnMapStart(string mapName)
-    {
-        // print any message to specific channel
-        if (_client?.GetChannel(_plugin.Config.SyncChannelId) is not IMessageChannel channel)
-            return;
-
-        var embed = new EmbedBuilder()
-            .WithAuthor("System")
-            .WithDescription("Changed map to " + mapName)
-            .WithColor(Color.Blue)
-            .Build();
-
-        channel.SendMessageAsync(embed: embed);
     }
 
     #endregion

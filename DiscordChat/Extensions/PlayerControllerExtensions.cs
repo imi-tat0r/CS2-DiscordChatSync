@@ -12,12 +12,13 @@ public static class PlayerControllerExtensions
 
     internal static string GetTeamString(this CCSPlayerController? player, bool abbreviate = false)
     {
-        return (player?.Team ?? 0) switch
+        var teamNum = player != null ? (int)player.Team : -1;
+        return teamNum switch
         {
-            CsTeam.None => abbreviate ? "-" : "None",
-            CsTeam.CounterTerrorist => abbreviate ? "CT" : "Counter-Terrorist",
-            CsTeam.Terrorist => abbreviate ? "T" : "Terrorist",
-            CsTeam.Spectator => abbreviate ? "Spec" : "Spectator",
+            (int)CsTeam.None => abbreviate ? "-" : "None",
+            (int)CsTeam.CounterTerrorist => abbreviate ? "CT" : "Counter-Terrorist",
+            (int)CsTeam.Terrorist => abbreviate ? "T" : "Terrorist",
+            (int)CsTeam.Spectator => abbreviate ? "Spec" : "Spectator",
             _ => ""
         };
     }

@@ -11,7 +11,7 @@ public class ChatFormatOptions
     [JsonPropertyName("ServerOutputFormat")]
     public string ServerOutputFormat { get; set; } = "[Discord - {Channel}] {UsernameStyled}: {Message}";
 
-    [JsonPropertyName("SyncPrefix")] public string SyncTrigger { get; set; } = "";
+    [JsonPropertyName("SyncPrefix")] public string SyncPrefix { get; set; } = "";
 
     [JsonPropertyName("DiscordEmbedFields")]
     public Dictionary<string, string> DiscordEmbedFields { get; set; } = new()
@@ -32,17 +32,28 @@ public class ChatFormatOptions
         {"FooterIconUrl", ""},
         {"Color", "{TeamColor}"}
     };
+
+    [JsonPropertyName("SystemMessages")]
+    public Dictionary<string, string> SystemMessages { get; set; } = new()
+    {
+        { "PlayerConnect", "{Player.Name} joined the server" },
+        { "PlayerDisconnect", "{Player.Name} left the server" },
+        { "MapChange", "Changed map to {Server.MapName}" }
+    };
 }
 
 public class DiscordChatSyncConfig : BasePluginConfig
 {
     [JsonPropertyName("DiscordToken")] public string DiscordToken { get; set; } = "";
     [JsonPropertyName("SyncChannelId")] public ulong SyncChannelId { get; set; } = 0;
+    [JsonPropertyName("SystemChannelId")] public ulong SystemChannelId { get; set; } = 0;
+    [JsonPropertyName("RconChannelId")] public ulong RconChannelId { get; set; } = 0;
+    [JsonPropertyName("RconMessagePrefix")] public string RconMessagePrefix { get; set; } = "";
     [JsonPropertyName("AdditionalReadChannelIds")] public List<ulong> AdditionalReadChannelIds { get; set; } = new();
     [JsonPropertyName("SyncTeamChat")] public bool SyncTeamChat { get; set; }
-    [JsonPropertyName("MessagePrefix")] public string MessagePrefix { get; set; } = "";
+    [JsonPropertyName("SyncConsoleSay")] public bool SyncConsoleSay { get; set; }
     [JsonPropertyName("IgnoreChatTriggers")] public bool IgnoreChatTriggers { get; set; } = true;
     [JsonPropertyName("ChatFormatOptions")] public ChatFormatOptions ChatFormatOptions { get; set; } = new();
 
-    [JsonPropertyName("ConfigVersion")] public override int Version { get; set; } = 2;
+    [JsonPropertyName("ConfigVersion")] public override int Version { get; set; } = 4;
 }
