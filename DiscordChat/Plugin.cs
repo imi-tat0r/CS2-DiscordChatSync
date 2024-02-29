@@ -17,7 +17,7 @@ namespace DiscordChat;
 public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
 {
     public override string ModuleName => "CS2-DiscordChatSync";
-    public override string ModuleVersion => "1.1.0";
+    public override string ModuleVersion => "1.1.1";
     public override string ModuleAuthor => "imi-tat0r";
     public override string ModuleDescription => "Syncs chat messages from and to a discord channel.";
     public DiscordChatSyncConfig Config { get; set; } = new();

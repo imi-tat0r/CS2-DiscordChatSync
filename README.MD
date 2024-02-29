@@ -1,6 +1,6 @@
 ![Copyright ev0lve Digital](https://img.shields.io/badge/Copyright-ev0lve%20Digital-blue) ![GitHub License](https://img.shields.io/github/license/imi-tat0r/CS2-DiscordChatSync) ![Issues](https://img.shields.io/github/issues/imi-tat0r/CS2-DiscordChatSync) ![Downloads](https://img.shields.io/github/downloads/imi-tat0r/CS2-DiscordChatSync/total) ![Stars](https://img.shields.io/github/stars/imi-tat0r/CS2-DiscordChatSync)
 
-# CS2 Discord Chat Sync (1.1.0)
+# CS2 Discord Chat Sync (1.1.1)
 ![image](https://du.hurenso.hn/r/17JDsG.png)
 
 # About
@@ -14,6 +14,9 @@ CS2 Discord Chat Sync is a plugin for Counter-Strike 2 that syncs chat between t
 - Customizable Discord template for chat messages
 - Customizable message template for Discord messages
 - SyncPrefix to only sync messages with a certain prefix
+- Send RCON commands from Discord
+- Receive system messages in a channel (player join/leave, map change)
+- Reload config without restarting the server `css_reload_cfg`
 
 # Dependencies
 [Metamod:Source (2.x)](https://www.sourcemm.net/downloads.php/?branch=master)  
@@ -78,14 +81,27 @@ The following placeholders can be used in the `DiscordEmbedFormat` and the `Disc
 {
    // your discord bot token
    "DiscordToken": "",
+   // the message to display as the bot's status
+   "DiscordStatusMessage": "discord.game_text",
+   
    // the channel id to sync from and to
    "SyncChannelId": 0,
-   // additional channels to read from (for news and announcements)
-   "AdditionalReadChannelIds": [],
    // if false, team chat will not be synced
    "SyncTeamChat": false,
-   // DEPRECATED - use ChatFormatOptions.SyncPrefix instead
-   "MessagePrefix": "",
+   // if false, console messages will not be synced (rcon say)
+   "SyncConsoleSay": false,
+   
+   // the channel id to send system messages to (like player join/leave, map change)
+   "SystemChannelId": 0,
+   
+   // the channel id to receive rcon commands from
+   "RconChannelId": 0,
+   // the message prefix for rcon commands (empty for all messages)
+   "RconMessagePrefix": "!rcon",
+   
+   // additional channels to read from (for news and announcements)
+   "AdditionalReadChannelIds": [],
+   
    // if true, chat and silent triggers from the core config will be ignored
    "IgnoreChatTriggers": true,
    
@@ -94,8 +110,10 @@ The following placeholders can be used in the `DiscordEmbedFormat` and the `Disc
       // time + date format 
       "TimeFormat": "HH:mm:ss",
       "DateFormat": "dd.MM.yyyy",
+      
       // format string for the chat output of discord messages
       "ServerOutputFormat": "[From Discord #{Channel}] {UsernameStyled} - {Green}{Date} {Blue}{Time}{Default}: {Message}",
+      
       // prefix for messages that should be synced (empty for all messages)
       "SyncPrefix": "",
       
@@ -125,10 +143,19 @@ The following placeholders can be used in the `DiscordEmbedFormat` and the `Disc
          
          // hex color code #RRGGBB or "{TeamColor}" for the player's team color
          "Color": "{TeamColor}"
+      },
+      
+      // dictionary of system messages
+      // you can use all chat placeholders
+      // leave empty or remove to disable a message
+      "SystemMessages": {
+         "PlayerConnect": "{Player.Name} joined the server",
+         "PlayerDisconnect": "{Player.Name} left the server",
+         "MapChange": "Changed map to {Server.MapName}"
       }
    },
    
-   "ConfigVersion": 2 // do not change
+   "ConfigVersion": 3 // do not change
 }
 ```
 
