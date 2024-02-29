@@ -70,7 +70,7 @@ public class DiscordService : BackgroundService
             Console.WriteLine(msg.ToString());
             return Task.CompletedTask;
         };
-        c.Ready += Ready;
+        c.Connected += Connected;
         c.MessageReceived += MessageReceived;
 
         // login and start the bot
@@ -84,10 +84,8 @@ public class DiscordService : BackgroundService
         Console.WriteLine("[DiscordChatSync] Why are we here? Just to suffer?");
     }
 
-    private async Task Ready()
+    private async Task Connected()
     {
-        Console.WriteLine("[DiscordChatSync] Ready?");
-
         if (Client == null)
             return;
 
@@ -101,7 +99,7 @@ public class DiscordService : BackgroundService
         }
         catch (Exception ex)
         {
-            Console.WriteLine("[DiscordChatSync] Exception in Ready: " + ex.Message);
+            Console.WriteLine("[DiscordChatSync] Exception while setting status: " + ex.Message);
         }
     }
 
