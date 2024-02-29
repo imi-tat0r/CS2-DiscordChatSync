@@ -47,14 +47,14 @@ public class DiscordChatSyncConfig : BasePluginConfig
     [JsonPropertyName("DiscordToken")] public string DiscordToken { get; set; } = "";
     [JsonPropertyName("DiscordStatusMessage")] public string DiscordStatusMessage { get; set; } = "discord.game_text";
     [JsonPropertyName("SyncChannelId")] public ulong SyncChannelId { get; set; } = 0;
+    [JsonPropertyName("SyncTeamChat")] public bool SyncTeamChat { get; set; }
+    [JsonPropertyName("SyncConsoleSay")] public bool SyncConsoleSay { get; set; }
     [JsonPropertyName("SystemChannelId")] public ulong SystemChannelId { get; set; } = 0;
     [JsonPropertyName("RconChannelId")] public ulong RconChannelId { get; set; } = 0;
     [JsonPropertyName("RconMessagePrefix")] public string RconMessagePrefix { get; set; } = "";
     [JsonPropertyName("AdditionalReadChannelIds")] public List<ulong> AdditionalReadChannelIds { get; set; } = new();
-    [JsonPropertyName("SyncTeamChat")] public bool SyncTeamChat { get; set; }
-    [JsonPropertyName("SyncConsoleSay")] public bool SyncConsoleSay { get; set; }
     [JsonPropertyName("IgnoreChatTriggers")] public bool IgnoreChatTriggers { get; set; } = true;
     [JsonPropertyName("ChatFormatOptions")] public ChatFormatOptions ChatFormatOptions { get; set; } = new();
 
-    [JsonPropertyName("ConfigVersion")] public override int Version { get; set; } = 4;
+    [JsonPropertyName("ConfigVersion")] public override int Version { get; set; } = 3;
 }
