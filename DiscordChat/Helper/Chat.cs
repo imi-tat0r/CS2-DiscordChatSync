@@ -5,6 +5,7 @@ using CounterStrikeSharp.API.Modules.Utils;
 using Discord;
 using Discord.WebSocket;
 using DiscordChat.Extensions;
+using Microsoft.Extensions.Localization;
 using Serilog;
 
 namespace DiscordChat.Helper;
@@ -67,14 +68,14 @@ public static class Chat
 
     public static Embed FormatChatMessageForDiscord(Dictionary<string, string> embedFormat,
         Dictionary<string, string> embedFields, Dictionary<string, string> dynamicReplacements,
-        CCSPlayerController? player, bool teamOnly, string message)
+        CCSPlayerController? player, bool teamOnly, string message, IStringLocalizer localizer)
     {
         var embed = new EmbedBuilder();
 
-        var chatTeam = teamOnly ? $"{player.GetTeamString(true)}" : "All";
+        var chatTeam = teamOnly ? $"{player.GetTeamString(true)}" : "team.all";
 
         dynamicReplacements.Add("{Chat.Message}", message);
-        dynamicReplacements.Add("{Chat.Team}", chatTeam);
+        dynamicReplacements.Add("{Chat.Team}", localizer[chatTeam]);
 
         embed.ApplyEmbedFormat(embedFormat, dynamicReplacements, player);
 
@@ -88,16 +89,16 @@ public static class Chat
     }
 
     public static Embed FormatSystemMessageForDiscord(Dictionary<string, string> embedFormat,
-        Dictionary<string, string> dynamicReplacements, string message)
+        Dictionary<string, string> dynamicReplacements, string message, IStringLocalizer localizer)
     {
         var embed = new EmbedBuilder();
 
         embed.ApplyEmbedFormat(embedFormat, dynamicReplacements, null);
 
         if (embedFormat.TryGetValue("AvatarUrl", out var avatarUrl) && !string.IsNullOrEmpty(avatarUrl))
-            embed.WithAuthor("System", avatarUrl);
+            embed.WithAuthor(localizer["player.name.system"], avatarUrl);
         else
-            embed.WithAuthor("System");
+            embed.WithAuthor(localizer["player.name.system"]);
         
         embed.Title = string.Empty;
         embed.WithDescription(ApplyDiscordMessageFormat(message, dynamicReplacements));

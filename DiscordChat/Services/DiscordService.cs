@@ -1,25 +1,24 @@
-﻿using CounterStrikeSharp.API.Core;
-using CounterStrikeSharp.API.Modules.Commands;
-using CounterStrikeSharp.API.Modules.Utils;
-using Discord;
+﻿using Discord;
 using Discord.WebSocket;
 using DiscordChat.Enums;
 using DiscordChat.Extensions;
-using DiscordChat.Helper;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Localization;
 
 namespace DiscordChat.Services;
 
 public class DiscordService : BackgroundService
 {
-    public static DiscordSocketClient? Client;
+    public static DiscordSocketClient? Client { get; private set; }
     private readonly DiscordChatSync _plugin;
     private readonly MessageService _messageService;
+    private readonly IStringLocalizer _localizer;
 
-    public DiscordService(DiscordChatSync plugin, MessageService messageService)
+    public DiscordService(DiscordChatSync plugin, MessageService messageService, IStringLocalizer localizer)
     {
         _plugin = plugin;
         _messageService = messageService;
+        _localizer = localizer;
     }
 
     #region BackgroundService
@@ -96,7 +95,7 @@ public class DiscordService : BackgroundService
         {
             // update info
             await Client.SetStatusAsync(UserStatus.Online);
-            await Client.SetGameAsync($"Syncing chat messages");
+            await Client.SetGameAsync(_localizer["discord.game_text"]);
 
             Console.WriteLine("[DiscordChatSync] Ready!");
         }
@@ -124,8 +123,6 @@ public class DiscordService : BackgroundService
             case DiscordMessageType.Chat:
             case DiscordMessageType.Broadcast:
                 _messageService.SyncDiscordMessage(msg, user);
-                break;
-            default:
                 break;
         }
 

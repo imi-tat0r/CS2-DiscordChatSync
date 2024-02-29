@@ -10,6 +10,7 @@ using DiscordChat.Extensions;
 using DiscordChat.Helper;
 using DiscordChat.Services;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
 
 namespace DiscordChat;
 
@@ -21,29 +22,28 @@ public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
     public override string ModuleDescription => "Syncs chat messages from and to a discord channel.";
     public DiscordChatSyncConfig Config { get; set; } = new();
     
-    private IServiceProvider? _serviceProvider = null;
-    
     private static readonly string AssemblyName = Assembly.GetExecutingAssembly().GetName().Name ?? "";
     private static readonly string CfgPath = $"{Server.GameDirectory}/csgo/addons/counterstrikesharp/configs/plugins/{AssemblyName}/{AssemblyName}.json";
     
     public ConVar? CvarHostName { get; set; }
     public int CurPlayers { get; set; } = 0;
     
+    private readonly IServiceProvider _serviceProvider;
+    
+    public DiscordChatSync(IServiceProvider serviceProvider)
+    {
+        _serviceProvider = serviceProvider;
+    }
+    
     public void OnConfigParsed(DiscordChatSyncConfig syncConfig)
     {
         Config = syncConfig;
         
         if (string.IsNullOrWhiteSpace(Config.DiscordToken))
-        {
             Console.WriteLine("[DiscordChatSync] Discord token is not set. Please set it in the config file.");
-            return;
-        }
         
         if (Config.SyncChannelId == 0)
-        {
             Console.WriteLine("[DiscordChatSync] Sync channel id is not set. Please set it in the config file.");
-            return;
-        }
         
         Chat.TimeFormat = Config.ChatFormatOptions.TimeFormat;
         Chat.DateFormat = Config.ChatFormatOptions.DateFormat;
@@ -81,34 +81,20 @@ public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
         
         Console.WriteLine("[DiscordChatSync] Start loading DiscordChatSync plugin");
 
-        Console.WriteLine("[DiscordChatSync] Add services to DI container");
-        var serviceCollection = new ServiceCollection();
-
-        serviceCollection.AddSingleton(this);
-        serviceCollection.AddSingleton<DiscordService>();
-        serviceCollection.AddSingleton<ChatService>();
-        serviceCollection.AddScoped<MessageService>();
-
-        _serviceProvider = serviceCollection.BuildServiceProvider();
-        Console.WriteLine("[DiscordChatSync] DI container done");
-
         Console.WriteLine("[DiscordChatSync] Registering event handlers");
         var messageService = _serviceProvider.GetRequiredService<MessageService>();
-        RegisterListener<Listeners.OnMapStart>(_ =>
-        {
-            messageService.SyncSystemMessage("MapChange", null);
-        });
+        RegisterListener<Listeners.OnMapStart>(_ => { messageService.SyncSystemMessage("MapChange", null); });
         
         RegisterEventHandler<EventPlayerDisconnect>((@event, info) =>
         {
-            CurPlayers = Utilities.GetPlayers().Count(p => p.IsPlayer());
             messageService.SyncSystemMessage("PlayerDisconnect", @event.Userid);
+            CurPlayers = Utilities.GetPlayers().Count(p => p.IsPlayer());
             return HookResult.Continue;
         });
         RegisterEventHandler<EventPlayerConnectFull>((@event, info) =>
         {
-            CurPlayers = Utilities.GetPlayers().Count(p => p.IsPlayer());
             messageService.SyncSystemMessage("PlayerConnect", @event.Userid);
+            CurPlayers = Utilities.GetPlayers().Count(p => p.IsPlayer());
             return HookResult.Continue;
         });
         Console.WriteLine("[DiscordChatSync] Event handlers registered");
@@ -149,5 +135,17 @@ public class DiscordChatSync : BasePlugin, IPluginConfig<DiscordChatSyncConfig>
         {
             info.ReplyToCommand($"[DiscordChatSync] Failed to reload config: {e.Message}");
         }
+    }
+}
+
+public class DiscordChatSyncServiceCollection : IPluginServiceCollection<DiscordChatSync>
+{
+    public void ConfigureServices(IServiceCollection serviceCollection)
+    {
+        serviceCollection.AddSingleton(this);
+        serviceCollection.AddSingleton<DiscordService>();
+        serviceCollection.AddSingleton<ChatService>();
+        serviceCollection.AddScoped<MessageService>();
+        //serviceCollection.AddSingleton<IStringLocalizer>();
     }
 }
