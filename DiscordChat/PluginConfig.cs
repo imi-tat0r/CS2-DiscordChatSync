@@ -45,6 +45,7 @@ public class ChatFormatOptions
 public class DiscordChatSyncConfig : BasePluginConfig
 {
     [JsonPropertyName("DiscordToken")] public string DiscordToken { get; set; } = "";
+    [JsonPropertyName("DiscordStatusMessage")] public string DiscordStatusMessage { get; set; } = "discord.game_text";
     [JsonPropertyName("SyncChannelId")] public ulong SyncChannelId { get; set; } = 0;
     [JsonPropertyName("SystemChannelId")] public ulong SystemChannelId { get; set; } = 0;
     [JsonPropertyName("RconChannelId")] public ulong RconChannelId { get; set; } = 0;

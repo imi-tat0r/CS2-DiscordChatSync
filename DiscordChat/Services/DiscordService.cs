@@ -93,7 +93,7 @@ public class DiscordService : BackgroundService
         {
             // update info
             await Client.SetStatusAsync(UserStatus.Online);
-            await Client.SetGameAsync(_localizer["discord.game_text"]);
+            await Client.SetGameAsync(_localizer[_plugin.Config.DiscordStatusMessage]);
 
             Console.WriteLine("[DiscordChatSync] Ready!");
         }
