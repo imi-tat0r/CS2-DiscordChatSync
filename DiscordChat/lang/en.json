@@ -1,0 +1,18 @@
+﻿{
+  "rcon.error_multiple_lines": "Only single line messages are supported for RCON message",
+  "rcon.error_prefix_missing": "RCON message must start with `{0}`",
+  "rcon.success": "Executed command: `{0}`",
+  "server.name.unavailable": "n/A",
+  "player.name.console": "Console",
+  "player.name.system": "System",
+  "team.none.short": "-",
+  "team.none.long": "None",
+  "team.spec.short": "Spec",
+  "team.spec.long": "Spectator",
+  "team.t.short": "T",
+  "team.t.long": "Terrorist",
+  "team.ct.short": "CT",
+  "team.ct.long": "Counter-Terrorist",
+  "team.all": "All",
+  "discord.game_text": "Syncing chat messages"
+}

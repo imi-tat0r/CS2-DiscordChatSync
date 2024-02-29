@@ -1,30 +1,82 @@
 ﻿using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Commands;
-using CounterStrikeSharp.API.Modules.Utils;
 using Discord;
 using Discord.WebSocket;
+using DiscordChat.Enums;
 using DiscordChat.Extensions;
 using DiscordChat.Helper;
-using Serilog;
+using Microsoft.Extensions.Localization;
 
 namespace DiscordChat.Services;
 
 public class MessageService
 {
     private readonly DiscordChatSync _plugin;
+    private readonly IStringLocalizer _localizer;
 
-    public MessageService(DiscordChatSync plugin)
+    public MessageService(DiscordChatSync plugin, IStringLocalizer localizer)
     {
         _plugin = plugin;
+        _localizer = localizer;
     }
 
-    public bool ShouldSyncDiscordMessage(ulong channelId)
+
+    public DiscordMessageType GetDiscordMessageType(SocketMessage msg)
     {
-        return _plugin.Config.SyncChannelId == channelId || _plugin.Config.AdditionalReadChannelIds.Contains(channelId);
+        if (msg.Channel.Id == _plugin.Config.SyncChannelId)
+            return DiscordMessageType.Chat;
+        if (_plugin.Config.AdditionalReadChannelIds.Contains(msg.Channel.Id))
+            return DiscordMessageType.Broadcast;
+
+        return msg.Channel.Id == _plugin.Config.RconChannelId ? DiscordMessageType.Rcon : DiscordMessageType.Unknown;
     }
 
-    public bool ShouldSyncChatMessage(CommandInfo info, bool all, out string outMessage)
+    public ChatMessageType GetChatMessageType(CCSPlayerController? player, string command)
+    {
+        if (player == null)
+            return ChatMessageType.Console;
+
+        return command switch
+        {
+            "say" => ChatMessageType.Chat,
+            "say_team" => ChatMessageType.TeamChat,
+            _ => ChatMessageType.Unknown
+        };
+    }
+
+    public void HandleRconDiscordMessage(SocketUserMessage msg)
+    {
+        var messageSplit = msg.Content.Split('\n')
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToList();
+
+        if (messageSplit.Count != 1)
+        {
+            msg.ReplyAsync(_localizer["rcon.error_multiple_lines"]);
+            return;
+        }
+
+        var message = messageSplit[0];
+
+        if (!string.IsNullOrEmpty(_plugin.Config.RconMessagePrefix) &&
+            !message.StartsWith(_plugin.Config.RconMessagePrefix))
+        {
+            msg.ReplyAsync(_localizer["rcon.error_prefix_missing", _plugin.Config.RconMessagePrefix]);
+            return;
+        }
+
+        if (message.StartsWith(_plugin.Config.RconMessagePrefix))
+            message = message[_plugin.Config.RconMessagePrefix.Length..].Trim();
+
+        Server.NextWorldUpdate(() =>
+        {
+            Server.ExecuteCommand(message);
+            msg.ReplyAsync(_localizer["rcon.success", message]);
+        });
+    }
+
+    public bool TryGetFullChatMessage(CommandInfo info, out string outMessage)
     {
         var inMessage = info.ArgString;
 
@@ -34,43 +86,8 @@ public class MessageService
 
         outMessage = inMessage.Trim();
 
-        if (!all && !_plugin.Config.SyncTeamChat)
-            return false;
-
         // ignore empty messages
-        if (string.IsNullOrWhiteSpace(outMessage))
-            return false;
-
-        // if both are empty, we don't sync anything (MessagePrefix is deprecated)
-        if (string.IsNullOrEmpty(_plugin.Config.ChatFormatOptions.SyncTrigger) &&
-            string.IsNullOrEmpty(_plugin.Config.MessagePrefix))
-            return true;
-
-        // deprecated MessagePrefix
-        if (!string.IsNullOrEmpty(_plugin.Config.MessagePrefix))
-        {
-            // warn about deprecation
-            Log.Information("{Message}",
-                "MessagePrefix is deprecated. Please use ChatFormatOptions.SyncTrigger instead.");
-
-            // ignore messages that don't start with the message prefix
-            if (!outMessage.StartsWith(_plugin.Config.MessagePrefix))
-                return false;
-
-            // remove the prefix from the message
-            outMessage = outMessage[_plugin.Config.MessagePrefix.Length..].Trim();
-
-            return true;
-        }
-
-        // ignore messages that don't start with the sync trigger
-        if (!outMessage.StartsWith(_plugin.Config.ChatFormatOptions.SyncTrigger))
-            return false;
-
-        // remove the prefix from the message
-        outMessage = outMessage[_plugin.Config.ChatFormatOptions.SyncTrigger.Length..].Trim();
-
-        return true;
+        return !string.IsNullOrWhiteSpace(outMessage);
     }
 
     public void SyncDiscordMessage(SocketUserMessage msg, SocketGuildUser user)
@@ -86,16 +103,50 @@ public class MessageService
         });
     }
 
-    public void SyncChatMessage(IMessageChannel channel, CCSPlayerController? player, bool teamOnly, string message)
+    public void SyncChatMessage(CCSPlayerController? player, bool teamOnly, string message)
     {
+        // print any message to specific channel
+        if (DiscordService.Client?.GetChannel(_plugin.Config.SyncChannelId) is not IMessageChannel channel)
+            return;
+
         var dynamicReplacements = GetDynamicReplacements(player);
 
         var embedFinal = Chat.FormatChatMessageForDiscord(
             _plugin.Config.ChatFormatOptions.DiscordEmbedFormat,
             _plugin.Config.ChatFormatOptions.DiscordEmbedFields,
-            dynamicReplacements, player, teamOnly, message
-        );
+            dynamicReplacements, player, teamOnly, message,
+            _localizer);
 
+        SendDiscordMessage(channel, embedFinal);
+    }
+
+    public void SyncSystemMessage(string type, CCSPlayerController? player)
+    {
+        // ignore bots
+        if (player != null && !player.IsPlayer())
+            return;
+        
+
+        // ignore if the message type is not defined in the config
+        if (!_plugin.Config.ChatFormatOptions.SystemMessages.TryGetValue(type, out var messageTemplate) ||
+            string.IsNullOrEmpty(messageTemplate))
+            return;
+
+        // print any message to specific channel
+        if (DiscordService.Client?.GetChannel(_plugin.Config.SystemChannelId) is not IMessageChannel channel)
+            return;
+
+        var dynamicReplacements = GetDynamicReplacements(player);
+
+        var embedFinal = Chat.FormatSystemMessageForDiscord(
+            _plugin.Config.ChatFormatOptions.DiscordEmbedFormat,
+            dynamicReplacements, messageTemplate, _localizer);
+
+        SendDiscordMessage(channel, embedFinal);
+    }
+
+    private static void SendDiscordMessage(IMessageChannel channel, Embed embedFinal)
+    {
         try
         {
             channel.SendMessageAsync(embed: embedFinal);
@@ -130,14 +181,14 @@ public class MessageService
         return new Dictionary<string, string>
         {
             { "{Player.SteamID}", (player?.SteamID ?? 0).ToString() },
-            { "{Player.Name}", player?.PlayerName ?? "Console" },
+            { "{Player.Name}", player?.PlayerName ?? _localizer["player.name.console"] },
             { "{Player.TeamName}", player.GetTeamString() },
             { "{Player.Team}", player.GetTeamString(true) },
-            { "{Player.TeamNum}", Convert.ToInt32(player?.Team ?? 0).ToString() },
+            { "{Player.TeamNum}", player != null ? Convert.ToInt32(player.Team).ToString() : "-1" },
             { "{Server.MapName}", Server.MapName },
             { "{Server.CurPlayers}", _plugin.CurPlayers.ToString() },
             { "{Server.MaxPlayers}", Server.MaxPlayers.ToString() },
-            { "{Server.Name}", _plugin.CvarHostName?.StringValue ?? "n/A" },
+            { "{Server.Name}", _plugin.CvarHostName?.StringValue ?? _localizer["server.name.unavailable"] },
         };
     }
 }

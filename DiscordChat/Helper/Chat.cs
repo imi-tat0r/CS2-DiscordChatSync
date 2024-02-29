@@ -5,6 +5,7 @@ using CounterStrikeSharp.API.Modules.Utils;
 using Discord;
 using Discord.WebSocket;
 using DiscordChat.Extensions;
+using Microsoft.Extensions.Localization;
 using Serilog;
 
 namespace DiscordChat.Helper;
@@ -20,7 +21,7 @@ public static class Chat
             field => $"{{{field.Name}}}",
             field => (char)(field.GetValue(null) ?? '\x01')
         );
-    
+
     // a static dictionary of constants and functions which transforms the input value
     private static readonly Dictionary<string, Func<string, string>> OtherTemplateVariables = new()
     {
@@ -33,7 +34,7 @@ public static class Chat
         var split = line.Split(' ');
 
         var newLine = "";
-                
+
         foreach (var s in split)
         {
             if (s.Length < 50)
@@ -44,34 +45,72 @@ public static class Chat
                 newLine += s[50..] + " ";
             }
         }
-                
+
         return newLine;
     }
-    
-    public static IEnumerable<string> FormatDiscordMessageForChat(string messageTemplate, SocketUserMessage message, SocketGuildUser user, List<string> messageParts)
+
+    public static IEnumerable<string> FormatDiscordMessageForChat(string messageTemplate, SocketUserMessage message,
+        SocketGuildUser user, List<string> messageParts)
     {
         if (messageParts.Count == 0)
             return Array.Empty<string>();
-        
+
         var firstLine = ApplyChatMessageFormat(messageTemplate, message, user, messageParts);
 
         var lines = new List<string> { firstLine };
-        
+
         if (messageParts.Count <= 1)
             return lines;
-        
+
         lines.AddRange(messageParts.Skip(1));
         return lines;
     }
-    public static Embed FormatChatMessageForDiscord(Dictionary<string, string> embedFormat, Dictionary<string, string> embedFields, Dictionary<string, string> dynamicReplacements, CCSPlayerController? player, bool teamOnly, string message)
+
+    public static Embed FormatChatMessageForDiscord(Dictionary<string, string> embedFormat,
+        Dictionary<string, string> embedFields, Dictionary<string, string> dynamicReplacements,
+        CCSPlayerController? player, bool teamOnly, string message, IStringLocalizer localizer)
     {
         var embed = new EmbedBuilder();
 
-        var chatTeam = teamOnly ? $"{player.GetTeamString(true)}" : "All";
-        
+        var chatTeam = teamOnly ? $"{player.GetTeamString(true)}" : "team.all";
+
         dynamicReplacements.Add("{Chat.Message}", message);
-        dynamicReplacements.Add("{Chat.Team}", chatTeam);
+        dynamicReplacements.Add("{Chat.Team}", localizer[chatTeam]);
+
+        embed.ApplyEmbedFormat(embedFormat, dynamicReplacements, player);
+
+        foreach (var field in embedFields)
+        {
+            embed.AddField(ApplyDiscordMessageFormat(field.Key, dynamicReplacements),
+                ApplyDiscordMessageFormat(field.Value, dynamicReplacements));
+        }
+
+        return embed.Build();
+    }
+
+    public static Embed FormatSystemMessageForDiscord(Dictionary<string, string> embedFormat,
+        Dictionary<string, string> dynamicReplacements, string message, IStringLocalizer localizer)
+    {
+        var embed = new EmbedBuilder();
+
+        embed.ApplyEmbedFormat(embedFormat, dynamicReplacements, null);
+
+        if (embedFormat.TryGetValue("AvatarUrl", out var avatarUrl) && !string.IsNullOrEmpty(avatarUrl))
+            embed.WithAuthor(localizer["player.name.system"], avatarUrl);
+        else
+            embed.WithAuthor(localizer["player.name.system"]);
         
+        embed.Title = string.Empty;
+        embed.WithDescription(ApplyDiscordMessageFormat(message, dynamicReplacements));
+        embed.WithColor(new Color(255, 255, 255));
+
+        return embed.Build();
+    }
+
+    private static void ApplyEmbedFormat(this EmbedBuilder embed, Dictionary<string, string> embedFormat,
+        Dictionary<string, string> dynamicReplacements,
+        CCSPlayerController? player)
+    {
         foreach (var format in embedFormat)
         {
             switch (format.Key)
@@ -79,9 +118,10 @@ public static class Chat
                 case "Author":
                     if (string.IsNullOrEmpty(embedFormat["Author"]))
                         break;
-                    
-                    if (!string.IsNullOrEmpty(embedFormat["AvatarUrl"]))
-                        embed.WithAuthor(ApplyDiscordMessageFormat(embedFormat["Author"], dynamicReplacements), embedFormat["AvatarUrl"]);
+
+                    if (embedFormat.TryGetValue("AvatarUrl", out var avatarUrl) && !string.IsNullOrEmpty(avatarUrl))
+                        embed.WithAuthor(ApplyDiscordMessageFormat(embedFormat["Author"], dynamicReplacements),
+                            avatarUrl);
                     else
                         embed.WithAuthor(ApplyDiscordMessageFormat(embedFormat["Author"], dynamicReplacements));
                     break;
@@ -97,15 +137,16 @@ public static class Chat
                     if (string.IsNullOrEmpty(embedFormat["Footer"]))
                         break;
 
-                    if (!string.IsNullOrEmpty(embedFormat["FooterIconUrl"]))
-                        embed.WithFooter(ApplyDiscordMessageFormat(embedFormat["Footer"], dynamicReplacements), embedFormat["FooterIconUrl"]);
+                    if (embedFormat.TryGetValue("FooterIconUrl", out var footerIconUrl) && !string.IsNullOrEmpty(footerIconUrl))
+                        embed.WithFooter(ApplyDiscordMessageFormat(embedFormat["Footer"], dynamicReplacements),
+                            footerIconUrl);
                     else
                         embed.WithFooter(ApplyDiscordMessageFormat(embedFormat["Footer"], dynamicReplacements));
                     break;
                 case "Color":
                     if (string.IsNullOrEmpty(embedFormat["Color"]))
                         break;
-                    
+
                     if (embedFormat["Color"] == "{TeamColor}")
                         embed.WithColor(ColorHelper.ChatColorToDiscordColor(player.GetChatColor()));
                     else if (embedFormat["Color"].StartsWith("#") && embedFormat["Color"].Length == 7)
@@ -115,51 +156,46 @@ public static class Chat
                     break;
             }
         }
-        
-        foreach (var field in embedFields)
-        {
-            embed.AddField(ApplyDiscordMessageFormat(field.Key, dynamicReplacements),
-                ApplyDiscordMessageFormat(field.Value, dynamicReplacements));
-        }
-        
-        return embed.Build();
     }
 
     private static string ApplyChatMessageFormat(string messageTemplate, SocketMessage message, SocketGuildUser user,
         IReadOnlyList<string> messageParts)
     {
         var firstLine = messageTemplate;
-        
+
         firstLine = FormatColorInChatMessage(firstLine);
         firstLine = FormatConstantsInMessage(firstLine);
 
         var username = user.Nickname ?? user.DisplayName;
-        
+
         var dynamicReplacements = new Dictionary<string, string>
         {
             { "{Channel}", message.Channel.Name },
             { "{Username}", username },
-            { "{UsernameStyled}", $"{ColorHelper.HexColorToChatColor(user.GetHighestRole().GetHexColor())}{username}{ChatColors.Default}" },
+            {
+                "{UsernameStyled}",
+                $"{ColorHelper.HexColorToChatColor(user.GetHighestRole().GetHexColor())}{username}{ChatColors.Default}"
+            },
         };
-        
+
         firstLine = FormatDynamicReplacements(firstLine, dynamicReplacements);
-        
+
         // if we have multiple lines, they are printed separately. If we have only one line, we print it inline 
         firstLine = firstLine.Replace("{Message}", messageParts[0]);
         return firstLine;
     }
-    
+
     private static string ApplyDiscordMessageFormat(string messageTemplate,
         Dictionary<string, string> dynamicReplacements)
     {
         var message = messageTemplate;
-        
+
         message = FormatConstantsInMessage(message);
         message = FormatDynamicReplacements(message, dynamicReplacements);
-        
+
         return message;
     }
-    
+
     private static string FormatColorInChatMessage(string message)
     {
         foreach (var color in ChatColorTemplateVariables)
@@ -167,6 +203,7 @@ public static class Chat
 
         return message;
     }
+
     private static string FormatConstantsInMessage(string message)
     {
         foreach (var constant in OtherTemplateVariables)
@@ -174,6 +211,7 @@ public static class Chat
 
         return message;
     }
+
     private static string FormatDynamicReplacements(string message, Dictionary<string, string> dynamicReplacements)
     {
         foreach (var replacement in dynamicReplacements)

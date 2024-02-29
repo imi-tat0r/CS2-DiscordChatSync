@@ -12,14 +12,17 @@ public static class PlayerControllerExtensions
 
     internal static string GetTeamString(this CCSPlayerController? player, bool abbreviate = false)
     {
-        return (player?.Team ?? 0) switch
+        var teamNum = player != null ? (int)player.Team : -1;
+        var teamStr = teamNum switch
         {
-            CsTeam.None => abbreviate ? "-" : "None",
-            CsTeam.CounterTerrorist => abbreviate ? "CT" : "Counter-Terrorist",
-            CsTeam.Terrorist => abbreviate ? "T" : "Terrorist",
-            CsTeam.Spectator => abbreviate ? "Spec" : "Spectator",
+            (int)CsTeam.None => "team.none",
+            (int)CsTeam.CounterTerrorist => "team.ct",
+            (int)CsTeam.Terrorist => "team.t",
+            (int)CsTeam.Spectator => "team.spec",
             _ => ""
         };
+
+        return abbreviate ? teamStr + ".short" : teamStr + ".long";
     }
 
     internal static char GetChatColor(this CCSPlayerController? player)
